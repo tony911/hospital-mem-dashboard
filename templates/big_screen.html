@@ -41,6 +41,20 @@ body{background:#030811;color:#fff;font-family:"Helvetica Neue",Helvetica,"PingF
 .log-item.out{border-left-color:#06d6a0;background:rgba(6,214,160,.04);color:#06d6a0}
 .log-item b{color:#fff}
 .hospital-status-row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.s6-dept-list{padding:2px 0 4px 18px;display:flex;flex-direction:column;gap:2px}
+.s6-dept-item{display:flex;justify-content:space-between;font-size:11px;color:#617385;padding:2px 4px;border-left:1px solid rgba(0,240,255,.15);margin-left:8px}
+.s6-dept-item .d-occ{color:#ff5e5e}
+.s6-dept-item .d-idle{color:#06d6a0}
+.s6-toggle-icon{display:inline-block;transition:transform .2s;font-size:10px;margin-right:4px;color:#00f0ff}
+.s6-toggle-icon.open{transform:rotate(90deg)}
+.hospital-status-row .s6-delta{display:inline-block;font-size:10px;font-weight:bold;padding:0 4px;border-radius:3px;animation:s6DeltaFade 2s ease forwards;margin-left:3px}
+.hospital-status-row .s6-delta.up{color:#06d6a0;background:rgba(6,214,160,.15)}
+.hospital-status-row .s6-delta.down{color:#ff4d4d;background:rgba(255,77,77,.15)}
+.s6-float-delta{position:absolute;font-size:14px;font-weight:bold;padding:2px 8px;border-radius:4px;animation:s6FloatUp 2s ease forwards;z-index:100;text-shadow:0 0 6px rgba(0,0,0,.8)}
+.s6-float-delta.up{color:#06d6a0;background:rgba(6,214,160,.2);border:1px solid rgba(6,214,160,.4)}
+.s6-float-delta.down{color:#ff4d4d;background:rgba(255,77,77,.2);border:1px solid rgba(255,77,77,.4)}
+@keyframes s6DeltaFade{0%{opacity:1;transform:translateY(0)}70%{opacity:1;transform:translateY(-4px)}100%{opacity:0;transform:translateY(-8px)}}
+@keyframes s6FloatUp{0%{opacity:1;transform:translateY(0)}70%{opacity:1;transform:translateY(-20px)}100%{opacity:0;transform:translateY(-40px)}}
 .floor-container{max-height:350px;overflow-y:auto;margin-top:6px}
 .floor-group-title{font-size:12px;color:#00f0ff;margin-top:8px;margin-bottom:3px;font-weight:bold;border-left:2px solid #00f0ff;padding-left:6px}
 .floor-item{font-size:11px;color:#a5b5c4;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);display:flex;justify-content:space-between}
@@ -194,7 +208,7 @@ body{background:#030811;color:#fff;font-family:"Helvetica Neue",Helvetica,"PingF
 <span class="legend-item"><span class="legend-box" style="background:rgba(11,35,77,.4);border:1px solid #0b478f"></span><span style="color:#fff">香港行政区</span></span>
 <span class="legend-item"><span class="legend-box" style="background:#ff4d4d;border-radius:50%;width:10px;height:10px"></span><span style="color:#fff">医疗机构</span></span>
 </div></div>
-<div class="map-container" id="s6MapWrapper" style="background:#030d22;box-shadow:inset 0 0 30px rgba(0,240,255,.08);overflow:hidden"><div id="s6EChart" style="width:100%;height:100%"></div></div></div></div>
+<div class="map-container" id="s6MapWrapper" style="background:#030d22;box-shadow:inset 0 0 30px rgba(0,240,255,.08);overflow:hidden;position:relative"><div id="s6EChart" style="width:100%;height:100%"></div><div id="s6FloatDeltas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden"></div></div></div></div>
 </div></div></div>
 </div>
 
@@ -636,16 +650,39 @@ async function load6(){
     document.getElementById('s6AvgRate').textContent = avgRate.toFixed(1)+'%';
     document.getElementById('s6MapTitle').textContent = '香港区域医院床位资源 ['+hour+'时] '+simDate;
 
-    // 左侧医院列表（总床、占用率、空闲）
+    // 左侧医院列表（总床、占用率、空闲 + 子级科室详情）
+    if(!window.s6PrevIdle) window.s6PrevIdle = {};
     let listHtml = '';
     s6Data.forEach(h => {
         const color = h._rate>=85?'#ff4d4d':h._rate>=70?'#ffb703':'#06d6a0';
         const idle = Math.round(h.beds * (1 - h._rate/100));
-        listHtml += `<div class="hospital-status-row"><span>${h.name}</span><span><span style="color:#5a7fa0">${h.beds}床</span> <span style="color:${color};font-weight:bold">${h._rate.toFixed(1)}%</span> <span style="color:#06d6a0">空${idle}</span></span></div>`;
+        const prevIdle = window.s6PrevIdle[h.name];
+        const delta = prevIdle !== undefined ? idle - prevIdle : 0;
+        window.s6PrevIdle[h.name] = idle;
+        const deltaHtml = delta !== 0 ? `<span class="s6-delta ${delta>0?'up':'down'}">${delta>0?'+':''}${delta}</span>` : '';
+        listHtml += `<div class="hospital-status-row" onclick="toggleS6Depts('${h.id}',event)"><span style="cursor:pointer"><span class="s6-toggle-icon open" data-id="${h.id}">▶</span> ${h.name}</span><span><span style="color:#5a7fa0">${h.beds}床</span> <span style="color:${color};font-weight:bold">${h._rate.toFixed(1)}%</span> <span style="color:#06d6a0">空${idle}</span> ${deltaHtml}</span></div><div class="s6-dept-list" data-parent="${h.id}" style="display:block"></div>`;
     });
     document.getElementById('s6HospList').innerHTML = listHtml;
 
-    // 右侧ECharts散点图
+    // 展开并加载所有医院科室
+    s6Data.forEach(function(h) {
+        var list = document.querySelector('.s6-dept-list[data-parent="'+h.id+'"]');
+        if(list) {
+            list._loaded = true;
+            list.innerHTML = '<div style="color:#617385;padding:2px 8px;font-size:10px">加载中...</div>';
+            fetch('/api/hospital_idle_depts?date='+simDate+'&hour='+hour).then(function(r){return r.json();}).then(function(data) {
+                var hdata = data[h.id];
+                if(!hdata||!hdata.depts) { list.innerHTML = ''; return; }
+                var dhtml = '';
+                hdata.depts.forEach(function(d) {
+                    dhtml += '<div class="s6-dept-item"><span>'+d.name+'</span><span><span class="d-occ">占'+d.occupied+'</span> <span class="d-idle">空'+d.idle+'</span></span></div>';
+                });
+                list.innerHTML = dhtml;
+            })['catch'](function(){list.innerHTML='<div style="color:#617385;font-size:10px">暂无</div>';});
+        }
+    });
+
+    // 右侧ECharts散点图（浮动变化指示独立实现）
     const leftMarkers = s6Data.filter(h=>['屯门医院','广华医院','玛丽医院'].includes(h.name));
     const rightMarkers = s6Data.filter(h=>!['屯门医院','广华医院','玛丽医院'].includes(h.name));
 
@@ -653,7 +690,10 @@ async function load6(){
         const data = pos === 'left' ? leftMarkers : rightMarkers;
         return {
             name: '医院-' + pos, type: 'effectScatter', coordinateSystem: 'geo',
-            data: data.map(h => ({name:h.name,value:[h.lng,h.lat,h._rate.toFixed(1),Math.round(h.beds*(1-h._rate/100)),h.beds]})),
+            data: data.map(h => {
+                const idle = Math.round(h.beds*(1-h._rate/100));
+                return {name:h.name,value:[h.lng,h.lat,h._rate.toFixed(1),idle,h.beds]};
+            }),
             symbolSize: 12, showEffectOn: 'render',
             rippleEffect: {brushType:'stroke',scale:4,period:2.5},
             label: {
@@ -673,7 +713,10 @@ async function load6(){
 
     s6Chart.setOption({
         tooltip: {trigger:'item',backgroundColor:'rgba(3,13,33,.95)',borderColor:'#00f0ff',borderWidth:1,
-            formatter: p => `<div style="font-size:12px;font-weight:bold;color:#00f0ff">${p.data.name}</div><div style="font-size:11px;color:#5a7fa0;margin-top:2px">总床: ${p.data.value[4]}床</div><div style="font-size:11px;color:#ff4d4d">占用: ${p.data.value[2]}%</div><div style="font-size:11px;color:#06d6a0">空闲: ${p.data.value[3]}床</div>`},
+            formatter: p => {
+                const d = p.data.value;
+                return `<div style="font-size:12px;font-weight:bold;color:#00f0ff">${p.data.name}</div><div style="font-size:11px;color:#5a7fa0;margin-top:2px">总床: ${d[4]}床</div><div style="font-size:11px;color:#ff4d4d">占用: ${d[2]}%</div><div style="font-size:11px;color:#06d6a0">空闲: ${d[3]}床</div>`;
+            }},
         geo: {
             map:'HK_MAP', roam:false,
             label:{show:true,color:'#495a6b',fontSize:12,position:'inside'},
@@ -682,6 +725,65 @@ async function load6(){
         },
         series: series
     }, true);
+
+    // 右侧地图浮动变化指示（飘出效果）
+    try {
+        const cont = document.getElementById('s6FloatDeltas');
+        if(cont){
+            s6Data.forEach(h => {
+                const idle = Math.round(h.beds*(1-h._rate/100));
+                const pIdle = window.s6EchartPrevIdle_flt ? window.s6EchartPrevIdle_flt[h.name] : undefined;
+                if(pIdle !== undefined && idle !== pIdle){
+                    const delta = idle - pIdle;
+                    if(s6Chart){
+                        const pt = s6Chart.convertToPixel({geoIndex:0}, [h.lng, h.lat]);
+                        if(pt){
+                            const el = document.createElement('div');
+                            el.className = 's6-float-delta ' + (delta>0?'up':'down');
+                            el.textContent = (delta>0?'+':'') + delta;
+                            el.style.left = (pt[0]-20)+'px';
+                            el.style.top = (pt[1]-30)+'px';
+                            cont.appendChild(el);
+                            setTimeout(()=>{if(el.parentNode)el.remove();}, 2000);
+                        }
+                    }
+                }
+            });
+            window.s6EchartPrevIdle_flt = Object.fromEntries(s6Data.map(h=>[h.name, Math.round(h.beds*(1-h._rate/100))]));
+        }
+    } catch(e){}
+}
+
+// 屏6左侧科室展开/收起
+function toggleS6Depts(hid, ev) {
+    const icon = document.querySelector(`.s6-toggle-icon[data-id="${hid}"]`);
+    const list = document.querySelector(`.s6-dept-list[data-parent="${hid}"]`);
+    if(!list) return;
+
+    // 首次展开需要加载数据
+    if(!list._loaded) {
+        list._loaded = true;
+        list.innerHTML = '<div style="color:#617385;padding:2px 8px;font-size:10px">加载中...</div>';
+        const h = S[5].h;
+        fetch('/api/hospital_idle_depts?date='+simDate+'&hour='+h).then(r=>r.json()).then(data => {
+            const hdata = data[hid];
+            if(!hdata||!hdata.depts) { list.innerHTML = ''; return; }
+            let html = '';
+            hdata.depts.forEach(d => {
+                html += `<div class="s6-dept-item"><span>${d.name}</span><span><span class="d-occ">占${d.occupied}</span> <span class="d-idle">空${d.idle}</span></span></div>`;
+            });
+            list.innerHTML = html;
+        }).catch(()=>{list.innerHTML='<div style="color:#617385;font-size:10px">暂无</div>';});
+    }
+
+    // 切换显示状态
+    if(list.style.display === 'none') {
+        list.style.display = 'block';
+        if(icon) icon.classList.add('open');
+    } else {
+        list.style.display = 'none';
+        if(icon) icon.classList.remove('open');
+    }
 }
 function genMap(name,type,bd){
     const c=document.getElementById('s4Canvas');if(!c)return;
