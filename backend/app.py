@@ -49,12 +49,12 @@ cache_lock = threading.Lock()
 
 screen_config = {
     "screens": [
-        {"id": 1, "title": "各科室病床使用率", "duration": 10, "carousel": True},
-        {"id": 2, "title": "医院床位占用率", "duration": 10, "carousel": False},
-        {"id": 3, "title": "各科室空闲病床数", "duration": 10, "carousel": True},
-        {"id": 4, "title": "病床分布图", "duration": 10, "carousel": True},
-        {"id": 5, "title": "科室占用率对称双轴", "duration": 10, "carousel": True},
-        {"id": 6, "title": "香港医院资源总览", "duration": 10, "carousel": True},
+        {"id": 1, "title": "各科室病床使用率", "duration": 10, "enabled": True},
+        {"id": 2, "title": "医院床位占用率", "duration": 10, "enabled": True},
+        {"id": 3, "title": "各科室空闲病床数", "duration": 10, "enabled": True},
+        {"id": 4, "title": "病床分布图", "duration": 10, "enabled": True},
+        {"id": 5, "title": "科室占用率对称双轴", "duration": 10, "enabled": True},
+        {"id": 6, "title": "香港医院资源总览", "duration": 10, "enabled": True},
     ],
     "simulated_date": "2026-01-15",
 }
@@ -424,9 +424,19 @@ def index():
     return render_template("admin.html", title="🏥 香港医院病床管理后台", config=screen_config)
 
 
+import json as json_lib
+
 @app.route("/preview")
 def preview():
-    return render_template("big_screen.html", title="🏥 香港医院病床实时监控大屏", config=screen_config)
+    order = request.args.get("order", "")
+    custom_order = []
+    if order:
+        try:
+            custom_order = [int(x.strip()) for x in order.split(",") if x.strip()]
+        except Exception:
+            pass
+    return render_template("big_screen.html", title="🏥 香港医院病床实时监控大屏",
+                           config=screen_config, custom_order=custom_order)
 
 
 @app.route("/preview/<int:screen_id>")
@@ -974,6 +984,35 @@ def api_hospital_geo():
         else:
             h.update({"beds": 0, "occupied": 0, "idle": 0, "rate": 0})
     return jsonify(hosps)
+
+
+@app.route("/api/hospital_idle_depts")
+def api_hospital_idle_depts():
+    """返回各医院各科室的空闲床位数（用于屏5日志流）"""
+    _init_data()
+    _ensure_cache()
+    date_str = request.args.get("date", screen_config["simulated_date"])
+    hour = int(request.args.get("hour", 12))
+
+    result = {}
+    for hid, data_hosp in data_store["hospitals"].items():
+        hours = _get_hourly(hid, date_str)
+        if not hours or hour >= len(hours):
+            continue
+        hr = hours[hour]
+        depts = []
+        for d in hr["depts"]:
+            depts.append({
+                "name": d["name"],
+                "total": d["total"],
+                "occupied": d["occupied"],
+                "idle": d["idle"],
+            })
+        result[hid] = {
+            "name": data_hosp["name"],
+            "depts": depts,
+        }
+    return jsonify(result)
 
 
 # ── 启动前预加载缓存 ──

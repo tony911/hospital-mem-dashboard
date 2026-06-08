@@ -23,6 +23,15 @@
         .preview-card .title { font-weight: 600; font-size: 15px; }
         .screen-card { transition: all .25s ease; cursor: pointer; }
         .screen-card:hover { transform: translateY(-5px); box-shadow: 0 12px 35px rgba(0,0,0,0.15) !important; }
+        .sortable-item { display: flex; align-items: center; padding: 10px 14px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 6px; cursor: grab; transition: all .15s; }
+        .sortable-item:hover { background: #e9ecef; }
+        .sortable-item .drag-handle { cursor: grab; color: #adb5bd; font-size: 18px; margin-right: 12px; }
+        .sortable-item .screen-name { flex: 1; font-weight: 600; font-size: 14px; }
+        .sortable-item .screen-badge { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 10px; }
+        .sortable-item .duration-input { width: 60px; text-align: center; font-size: 13px; }
+        .sortable-item .form-check-input { cursor: pointer; }
+        .sortable-item.dragging { opacity: 0.4; }
+        .sortable-chosen { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
     </style>
 </head>
 <body>
@@ -122,7 +131,7 @@
                         <div class="d-flex align-items-center gap-2">
                             <span class="text-muted small">模拟日期：</span>
                             <input type="date" class="form-control form-control-sm" style="width:160px" id="simDateCfg" value="{{ config.get('simulated_date', '2026-01-15') }}" onchange="setSimDate(this)">
-                            <a href="/preview" target="_blank" class="btn btn-dark btn-sm ms-2"><i class="bi bi-play-circle"></i> 全屏轮播</a>
+                            <a href="/preview" target="_blank" class="btn btn-dark btn-sm ms-2"><i class="bi bi-play-circle"></i> 总体预览</a>
                         </div>
                     </div>
 
@@ -213,6 +222,19 @@
                             </a>
                         </div>
                     </div>
+
+                    <!-- 播放排序配置 -->
+                    <h5 class="fw-bold mt-3 mb-2"><i class="bi bi-arrow-up-down"></i> 播放顺序与时长配置</h5>
+                    <p class="text-muted small mb-2">拖拽调整播放顺序 · 勾选参与轮播 · 设置每个大屏播放时长（秒）</p>
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <div id="sortableScreens" class="sortable-list"></div>
+                            <div class="d-flex justify-content-end gap-2 mt-3">
+                                <button class="btn btn-success" onclick="saveScreenOrder()"><i class="bi bi-check-lg"></i> 保存配置</button>
+                                <span class="text-muted small align-self-center" id="configSaveMsg"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 数据查询 -->
@@ -250,6 +272,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script>
     // ── 左侧Tab切换 ──
     document.querySelectorAll('[data-tab]').forEach(el => {
@@ -378,6 +401,116 @@
             tb.innerHTML = h; document.getElementById('ovFiles').textContent = files.length;
         });
     }
+
+    // ── 大屏排序配置 ──
+    const SCREEN_COLORS = {1:'#0d6efd',2:'#dc3545',3:'#198754',4:'#ffc107',5:'#6f42c1',6:'#fd7e14'};
+    const SCREEN_TITLES = {1:'各科室病床使用率',2:'医院床位占用率',3:'各科室空闲病床数',4:'病床分布图',5:'科室占用率对称双轴',6:'香港医院资源总览'};
+    let screenOrder = [];
+    let sortable = null;
+
+    function loadScreenConfig() {
+        fetch('/api/screen_config').then(r=>r.json()).then(config => {
+            screenOrder = config.screens || [];
+            renderSortableList();
+        });
+    }
+
+    function renderSortableList() {
+        const container = document.getElementById('sortableScreens');
+        if (!container || !screenOrder.length) return;
+        let html = '';
+        screenOrder.forEach((s, i) => {
+            const c = SCREEN_COLORS[s.id] || '#6c757d';
+            html += `<div class="sortable-item" data-id="${s.id}" data-idx="${i}">
+                <span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>
+                <span class="screen-badge" style="background:${c};color:#fff">${s.id}</span>
+                <span class="screen-name">${s.title}</span>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="text-muted small mb-0">时长</label>
+                    <input type="number" class="form-control form-control-sm duration-input" value="${s.duration || 10}" min="3" max="60" data-id="${s.id}">
+                    <label class="text-muted small mb-0 ms-2">启用</label>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input screen-toggle" type="checkbox" data-id="${s.id}" ${s.enabled !== false ? 'checked' : ''}>
+                    </div>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+
+        if (sortable) sortable.destroy();
+        sortable = new Sortable(container, {
+            animation: 200,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-chosen',
+            dragClass: 'dragging',
+            onEnd: function() {
+                // Update screenOrder based on new DOM order
+                const items = container.querySelectorAll('.sortable-item');
+                const newOrder = [];
+                items.forEach(el => {
+                    const id = parseInt(el.dataset.id);
+                    const old = screenOrder.find(s => s.id === id);
+                    if (old) newOrder.push(old);
+                });
+                screenOrder = newOrder;
+                updatePreviewBtn();
+            }
+        });
+        updatePreviewBtn();
+    }
+
+    function updatePreviewBtn() {
+        const enabled = screenOrder.filter(s => s.enabled !== false);
+        const btn = document.getElementById('fullPreviewBtn');
+        if (enabled.length > 0) {
+            // Store order as query param
+            const ids = enabled.map(s => s.id).join(',');
+            btn.href = '/preview?order=' + ids;
+        }
+    }
+
+    function saveScreenOrder() {
+        // Read current values from DOM
+        const items = document.querySelectorAll('.sortable-item');
+        const screens = [];
+        items.forEach(el => {
+            const id = parseInt(el.dataset.id);
+            const dur = parseInt(el.querySelector('.duration-input').value) || 10;
+            const enabled = el.querySelector('.screen-toggle').checked;
+            screens.push({id, title: SCREEN_TITLES[id] || ('大屏'+id), duration: dur, enabled});
+        });
+        screenOrder = screens;
+
+        fetch('/api/screen_config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({screens, simulated_date: document.getElementById('simDateCfg')?.value || '2026-01-15'})
+        }).then(r=>r.json()).then(d => {
+            const msg = document.getElementById('configSaveMsg');
+            if (d.success) {
+                msg.textContent = '✅ 配置已保存';
+                msg.style.color = '#198754';
+                updatePreviewBtn();
+            } else {
+                msg.textContent = '❌ 保存失败';
+                msg.style.color = '#dc3545';
+            }
+            setTimeout(() => msg.textContent = '', 2000);
+        });
+    }
+
+    // Init config on tab load
+    document.addEventListener('DOMContentLoaded', () => {
+        // Also load config when screens tab is clicked
+        const origTab = document.querySelector('[data-tab]').click;
+        document.querySelectorAll('[data-tab]').forEach(el => {
+            el.addEventListener('click', e => {
+                if (el.dataset.tab === 'screens') {
+                    setTimeout(loadScreenConfig, 50);
+                }
+            });
+        });
+    });
     </script>
 </body>
 </html>
