@@ -1,0 +1,19 @@
+# 生成的模拟数据
+generated_data/
+*.csv
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 参考HTML文件（不是项目代码）
+图1.html
+图2.html
+图3.html
+图4.html
+图5.html
+图6.html
+
+# macOS
+.DS_Store
