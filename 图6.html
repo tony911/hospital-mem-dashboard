@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>香港公立医院床位资源总览大屏</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        /* 基础样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #020511;
+            color: #ffffff;
+            font-family: "Helvetica Neue", Helvetica, "PingFang SC", Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* 大屏幕框架 */
+        .dashboard-container {
+            width: 100%;
+            height: 100%;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(circle at 50% 50%, #06142e 0%, #020511 100%);
+        }
+
+        /* 头部大标题 */
+        .header {
+            height: 50px;
+            width: 100%;
+            position: relative;
+            text-align: center;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #00f0ff;
+            letter-spacing: 3px;
+            line-height: 40px;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        }
+        .header .sub-info {
+            position: absolute;
+            right: 10px;
+            bottom: 12px;
+            font-size: 13px;
+            color: #52667a;
+        }
+
+        /* 核心内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            gap: 24px;
+            min-height: 0;
+        }
+
+        /* 左侧综合看板 */
+        .sidebar-left {
+            width: 340px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .card {
+            background: rgba(6, 20, 46, 0.65);
+            border: 1px solid #0b2752;
+            border-radius: 4px;
+            padding: 16px;
+            position: relative;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 8px; height: 8px;
+            border-top: 2px solid #00f0ff; border-left: 2px solid #00f0ff;
+        }
+        .card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; right: 0; width: 8px; height: 8px;
+            border-bottom: 2px solid #00f0ff; border-right: 2px solid #00f0ff;
+        }
+        .card-title {
+            font-size: 13px;
+            color: #617385;
+            margin-bottom: 6px;
+        }
+        .card-value {
+            font-size: 28px;
+            font-weight: bold;
+            font-family: 'Impact', sans-serif;
+            color: #00f0ff;
+            margin-top: 2px;
+        }
+        .hospital-status-row {
+            font-size: 12px;
+            color: #a5b5c4;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* 右侧：ECharts 地图核心区 */
+        .map-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .map-canvas-container {
+            flex: 1;
+            background: rgba(3, 10, 24, 0.4);
+            border: 1px solid #0c2b5c;
+            border-radius: 4px;
+            position: relative;
+            box-shadow: inset 0 0 30px rgba(0, 240, 255, 0.05);
+        }
+        #echartsMap {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <div class="header">
+        <h1>香港区域核心医疗机构病床资源动态监测大屏 </h1>
+        <div class="sub-info" id="currentSystemTime">数据总线连通中...</div>
+    </div>
+
+    <div class="main-content">
+        <div class="sidebar-left">
+            <div class="card">
+                <div class="card-title">空间防撞卡片规约</div>
+                <div style="font-size: 13px; color: #ff9f43; line-height: 1.6; margin-top: 4px;">
+                    
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">全港当前综合病床占用率 (2s步长)</div>
+                <div class="card-value" id="hkAvgOccupancy" style="color: #ff4d4d;">0.0%</div>
+            </div>
+            <div class="card" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                <div class="card-title" style="color: #00f0ff; font-weight: bold; margin-bottom: 5px;">联网医院核心数据流</div>
+                <div class="hospital-status-row" style="font-weight:bold; color:#ffffff;"><span>院区抬头</span><span>即时占用率</span></div>
+                <div class="floor-container" id="hospitalStatusList" style="flex:1; overflow-y:auto;">
+                    </div>
+            </div>
+        </div>
+
+        <div class="map-area">
+            <div class="map-canvas-container">
+                <div id="echartsMap"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 升级内嵌：香港标准全景行政区划 GeoJSON 地理数据 ---
+    const hkFullGeoJson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": { "name": "新界及九龙腹地" },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [113.85, 22.48], [114.00, 22.55], [114.20, 22.55], [114.30, 22.54], 
+                        [114.35, 22.43], [114.28, 22.35], [114.24, 22.29], [114.12, 22.29], 
+                        [114.08, 22.33], [113.98, 22.36], [113.84, 22.37], [113.85, 22.48]
+                    ]]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": { "name": "香港岛" },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [114.11, 22.28], [114.16, 22.29], [114.22, 22.29], [114.27, 22.27], 
+                        [114.25, 22.22], [114.19, 22.21], [114.13, 22.24], [114.11, 22.28]
+                    ]]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": { "name": "大屿山及周边离岛" },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [113.84, 22.32], [113.96, 22.33], [114.03, 22.27], [114.01, 22.20],
+                        [113.91, 22.22], [113.83, 22.25], [113.84, 22.32]
+                    ]]
+                }
+            }
+        ]
+    };
+
+    // --- 6家公立医院高精度空间经纬度坐标与基础配置 ---
+    // 【关键重构】专门引入 labelPos 项，指定每栋楼的数据标签框向各自互补的方向弹开，防止挨得太近导致重叠
+    let hospitalMarkers = [
+        { name: "屯门医院", value: [113.97, 22.42], baseRate: 0.74, maxFree: 45, labelPos: "left" },
+        { name: "威尔斯亲王医院", value: [114.21, 22.39], baseRate: 0.76, maxFree: 50, labelPos: "right" },
+        { name: "广华医院", value: [114.15, 22.32], baseRate: 0.83, maxFree: 35, labelPos: "left" }, // 往左边走
+        { name: "伊利沙伯医院", value: [114.19, 22.30], baseRate: 0.89, maxFree: 45, labelPos: "right" }, // 往右边走，错开九龙核心区
+        { name: "玛丽医院", value: [114.12, 22.25], baseRate: 0.79, maxFree: 40, labelPos: "left" },
+        { name: "东区尤德夫人医院", value: [114.24, 22.26], baseRate: 0.81, maxFree: 35, labelPos: "right" }
+    ];
+
+    const mapChart = echarts.init(document.getElementById('echartsMap'));
+    echarts.registerMap('HK_PERFECT', hkFullGeoJson);
+
+    // --- 核心函数：2秒洗牌一次各院区及全港病床指标数据 ---
+    function shuffleMedicalStatusData() {
+        let totalSumRate = 0;
+        let listHtml = "";
+
+        hospitalMarkers.forEach(h => {
+            h.currentRate = Math.min(0.99, Math.max(0.4, h.baseRate + (Math.random() * 0.05 - 0.025)));
+            totalSumRate += h.currentRate;
+            h.totalFreeCount = 15 + Math.floor(Math.random() * (h.maxFree - 15));
+
+            listHtml += `<div class="hospital-status-row">
+                <span>${h.name}</span>
+                <span style="color:#ff4d4d; font-weight:bold;"> ${(h.currentRate * 100).toFixed(1)}%</span>
+            </div>`;
+        });
+
+        let globalAvg = totalSumRate / hospitalMarkers.length;
+        document.getElementById('hkAvgOccupancy').innerText = (globalAvg * 100).toFixed(1) + "%";
+        document.getElementById('hospitalStatusList').innerHTML = listHtml;
+    }
+
+    // --- ECharts 动态 Options 渲染引擎 ---
+    function updateEchartsMap() {
+        shuffleMedicalStatusData();
+
+        // 依据各家医院专属设定的 labelPos（左/右朝向）生成独立的 ECharts 系列数据，彻底打散空间布局
+        let seriesList = ["left", "right"].map(pos => {
+            let filteredData = hospitalMarkers.filter(h => h.labelPos === pos).map(h => {
+                return {
+                    name: h.name,
+                    value: [h.value[0], h.value[1], (h.currentRate * 100).toFixed(1), h.totalFreeCount]
+                };
+            });
+
+            return {
+                name: '联网机构实时负载-' + pos,
+                type: 'effectScatter', 
+                coordinateSystem: 'geo',
+                data: filteredData,
+                symbolSize: 11, // 定位红点大小
+                showEffectOn: 'render',
+                rippleEffect: {
+                    brushType: 'stroke',
+                    scale: 3.5, 
+                    period: 2.5 
+                },
+                
+                // 【重点升级需求】：使用 backgroundColor、borderColor 和 padding 给每个医院的数据套上独立卡片框
+                label: {
+                    show: true,
+                    position: pos, // 核心：向各自不同的物理方向拉伸错开，不重叠
+                    distance: 14,  // 增大与原点红点的避让间距
+                    backgroundColor: 'rgba(3, 15, 39, 0.88)', // 卡片背景底色
+                    borderColor: 'rgba(0, 240, 255, 0.45)',  // 卡片科技青边框
+                    borderWidth: 1.5,
+                    borderRadius: 3,
+                    padding: [8, 10], // 撑开内部空间
+                    
+                    formatter: function(params) {
+                        let d = params.data;
+                        return `{title|${d.name}}\n{used|🔴 占用: ${d.value[2]}%}  {free|🟢 空闲: ${d.value[3]}床}`;
+                    },
+                    rich: {
+                        title: {
+                            color: '#00f0ff',
+                            fontWeight: 'bold',
+                            fontSize: 12,
+                            lineHeight: 18,
+                            align: 'left'
+                        },
+                        used: {
+                            color: '#ff4d4d',
+                            fontWeight: 'bold',
+                            fontSize: 11,
+                            lineHeight: 16
+                        },
+                        free: {
+                            color: '#06d6a0',
+                            fontWeight: 'bold',
+                            fontSize: 11,
+                            lineHeight: 16
+                        }
+                    }
+                },
+                itemStyle: {
+                    color: '#ff4d4d',
+                    shadowBlur: 8,
+                    shadowColor: '#ff4d4d'
+                }
+            };
+        });
+
+        let option = {
+            tooltip: {
+                trigger: 'item',
+                backgroundColor: 'rgba(3, 13, 33, 0.95)',
+                borderColor: '#00f0ff',
+                borderWidth: 1,
+                formatter: function (params) {
+                    let d = params.data;
+                    return `<div style="font-size:12px; font-weight:bold; color:#00f0ff;">${d.name}</div>
+                            <div style="font-size:11px; color:#ff4d4d; margin-top:4px;">即时占用: ${d.value[2]}%</div>
+                            <div style="font-size:11px; color:#06d6a0;">全院空闲: ${d.value[3]}张</div>`;
+                }
+            },
+            
+            // 2D 地理边界（地图保持绝对静止不动）
+            geo: {
+                map: 'HK_PERFECT',
+                roam: true, // 支持鼠标滚轮缩放与平移，但底图上的文字不再位移
+                label: {
+                    show: true,
+                    color: '#495a6b',
+                    fontSize: 12,
+                    position: 'inside'
+                },
+                itemStyle: {
+                    areaColor: 'rgba(11, 35, 77, 0.4)', // 香港板块陆地统一深海蓝
+                    borderColor: '#0b478f',             // 加深区域边界线条
+                    borderWidth: 2
+                },
+                emphasis: {
+                    itemStyle: { areaColor: 'rgba(15, 48, 102, 0.6)' },
+                    label: { color: '#ffffff' }
+                }
+            },
+
+            // 装载两个反向定位不重叠的系列图层
+            series: seriesList
+        };
+
+        mapChart.setOption(option);
+    }
+
+    // --- 大屏总时钟：严格锁定 2000毫秒（2秒）更新频率 ---
+    function updateSystemTimeAndData() {
+        let now = new Date();
+        document.getElementById('currentSystemTime').innerText = "港府联网实时数据总线 | 刷新频率: 2.0s | 时间: " + now.toLocaleTimeString();
+        
+        // 刷新图表
+        updateEchartsMap();
+    }
+
+    // 防错位自适应重绘
+    window.addEventListener('resize', () => {
+        mapChart.resize();
+    });
+
+    // 稳定加载初始化
+    setTimeout(() => {
+        updateSystemTimeAndData();
+        animationTimer = setInterval(updateSystemTimeAndData, 2000); // 严格控制 2秒 步长
+    }, 200);
+</script>
+
+</body>
+</html>

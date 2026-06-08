@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; }
+        .sidebar { background: #fff; min-height: calc(100vh - 56px); border-right: 1px solid #dee2e6; }
+        .sidebar .nav-link { color: #495057; padding: 12px 20px; border-radius: 0; border-left: 3px solid transparent; }
+        .sidebar .nav-link:hover { background: #f8f9fa; }
+        .sidebar .nav-link.active { background: #e8f0fe; border-left-color: #0d6efd; color: #0d6efd; font-weight: 600; }
+        .tab-page { display: none; }
+        .tab-page.active { display: block; }
+        .progress-bar-animated { background: linear-gradient(90deg, #0d6efd, #0a58ca); }
+        .stat-card { border: none; border-radius: 12px; }
+        .preview-card { border: none; border-radius: 12px; transition: transform .2s; cursor: pointer; }
+        .preview-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,.12); }
+        .preview-card .card-body { text-align: center; padding: 25px; }
+        .preview-card .icon { font-size: 36px; margin-bottom: 10px; }
+        .preview-card .title { font-weight: 600; font-size: 15px; }
+        .screen-card { transition: all .25s ease; cursor: pointer; }
+        .screen-card:hover { transform: translateY(-5px); box-shadow: 0 12px 35px rgba(0,0,0,0.15) !important; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary px-3">
+        <a class="navbar-brand fw-bold" href="/"><i class="bi bi-hospital"></i> 香港医院病床管理后台</a>
+    </nav>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2 sidebar p-0">
+                <div class="nav flex-column mt-2">
+                    <a class="nav-link active" data-tab="overview" href="#"><i class="bi bi-speedometer2"></i> 总览</a>
+                    <a class="nav-link" data-tab="generate" href="#"><i class="bi bi-gear"></i> 数据生成</a>
+                    <a class="nav-link" data-tab="query" href="#"><i class="bi bi-search"></i> 数据查询</a>
+                    <a class="nav-link" data-tab="files" href="#"><i class="bi bi-files"></i> 文件管理</a>
+                    <a class="nav-link" data-tab="screens" href="#"><i class="bi bi-tv"></i> 大屏配置</a>
+                </div>
+            </div>
+            <div class="col-md-10 p-4">
+                <!-- 总览 -->
+                <div class="tab-page active" id="tab-overview">
+                    <h4 class="mb-3"><i class="bi bi-speedometer2"></i> 系统总览</h4>
+                    <div class="row g-3" style="height:calc(100vh - 140px);overflow:hidden">
+                        <!-- 左侧：4张统计卡片 -->
+                        <div class="col-md-3 d-flex flex-column gap-3">
+                            <div class="card stat-card shadow-sm flex-fill d-flex align-items-center justify-content-center" style="min-height:0"><div class="card-body text-center py-2">
+                                <div class="h3 text-primary mb-1"><i class="bi bi-building"></i></div>
+                                <h6 class="text-muted mb-0">医院数量</h6>
+                                <h2 class="mb-0" id="ovHospitals">-</h2>
+                            </div></div>
+                            <div class="card stat-card shadow-sm flex-fill d-flex align-items-center justify-content-center" style="min-height:0"><div class="card-body text-center py-2">
+                                <div class="h3 text-info mb-1"><i class="bi bi-grid-3x3-gap"></i></div>
+                                <h6 class="text-muted mb-0">总科室</h6>
+                                <h2 class="mb-0" id="ovDepts">-</h2>
+                            </div></div>
+                            <div class="card stat-card shadow-sm flex-fill d-flex align-items-center justify-content-center" style="min-height:0"><div class="card-body text-center py-2">
+                                <div class="h3 text-success mb-1"><i class="bi bi-columns-gap"></i></div>
+                                <h6 class="text-muted mb-0">总床位数</h6>
+                                <h2 class="mb-0" id="ovBeds">-</h2>
+                            </div></div>
+                            <div class="card stat-card shadow-sm flex-fill d-flex align-items-center justify-content-center" style="min-height:0"><div class="card-body text-center py-2">
+                                <div class="h3 text-warning mb-1"><i class="bi bi-folder2"></i></div>
+                                <h6 class="text-muted mb-0">生成文件</h6>
+                                <h2 class="mb-0" id="ovFiles">-</h2>
+                            </div></div>
+                        </div>
+                        <!-- 右侧：两个表格 -->
+                        <div class="col-md-9 d-flex flex-column gap-3" style="overflow:hidden">
+                            <div class="flex-fill d-flex flex-column" style="min-height:0">
+                                <h6 class="mb-1"><i class="bi bi-hospital"></i> 各医院床位占用</h6>
+                                <div class="table-responsive flex-fill" style="overflow-y:auto">
+                                    <table class="table table-sm table-hover table-bordered align-middle mb-0">
+                                        <thead class="table-light sticky-top"><tr style="font-size:13px">
+                                            <th>医院</th><th>地区</th><th>科室</th><th>床位</th><th>占用</th><th>空闲</th><th>占用率</th>
+                                        </tr></thead>
+                                        <tbody id="hospOccBody" style="font-size:13px"><tr><td colspan="7" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="flex-fill d-flex flex-column" style="min-height:0">
+                                <h6 class="mb-1"><i class="bi bi-bar-chart"></i> 各科室占用情况（跨医院汇总）</h6>
+                                <div class="table-responsive flex-fill" style="overflow-y:auto">
+                                    <table class="table table-sm table-hover table-bordered align-middle mb-0">
+                                        <thead class="table-light sticky-top"><tr style="font-size:13px">
+                                            <th>科室</th><th>医院数</th><th>总床位</th><th>占用</th><th>空闲</th><th>占用率</th>
+                                        </tr></thead>
+                                        <tbody id="deptSumBody" style="font-size:13px"><tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 数据生成 -->
+                <div class="tab-page" id="tab-generate">
+                    <h4 class="mb-3"><i class="bi bi-gear"></i> 模拟数据生成</h4>
+                    <div class="card shadow-sm"><div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4"><label class="form-label fw-bold">起始日期</label><input type="date" id="genStart" class="form-control" value="2026-01-01"></div>
+                            <div class="col-md-4"><label class="form-label fw-bold">结束日期</label><input type="date" id="genEnd" class="form-control" value="2026-01-31"></div>
+                            <div class="col-md-4"><button class="btn btn-primary btn-lg w-100" id="genBtn" onclick="startGenerate()"><i class="bi bi-play-fill"></i> 生成模拟数据</button></div>
+                        </div>
+                        <div id="progressSection" class="mt-3 d-none">
+                            <h6 class="fw-bold mt-3">生成进度</h6>
+                            <div class="progress mb-2" style="height:28px"><div class="progress-bar progress-bar-animated" id="mainProgress" style="width:0%">0%</div></div>
+                            <div id="progressDetails" class="row g-2"></div>
+                        </div>
+                        <div id="genLog" class="mt-2 d-none"><pre class="bg-dark text-light p-3 rounded" style="max-height:250px;overflow-y:auto;font-size:13px" id="genLogText"></pre></div>
+                    </div></div>
+                </div>
+
+                <!-- 大屏配置 -->
+                <div class="tab-page" id="tab-screens">
+                    <!-- 顶部标题栏 -->
+                    <div class="bg-white rounded-3 shadow-sm p-3 mb-3 d-flex align-items-center justify-content-between">
+                        <h4 class="mb-0"><i class="bi bi-tv text-primary"></i> 大屏配置</h4>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="text-muted small">模拟日期：</span>
+                            <input type="date" class="form-control form-control-sm" style="width:160px" id="simDateCfg" value="{{ config.get('simulated_date', '2026-01-15') }}" onchange="setSimDate(this)">
+                            <a href="/preview" target="_blank" class="btn btn-dark btn-sm ms-2"><i class="bi bi-play-circle"></i> 全屏轮播</a>
+                        </div>
+                    </div>
+
+                    <!-- 6大屏预览卡片 → 2行×3列 -->
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <a href="/preview/1" target="_blank" class="text-decoration-none">
+                                <div class="card border-0 shadow-sm h-100 screen-card" style="border-radius:12px;overflow:hidden;">
+                                    <div class="card-header text-white text-center py-2 fw-bold" style="background:linear-gradient(135deg,#0d6efd,#0a58ca);border:none;font-size:14px">
+                                        <i class="bi bi-bar-chart-fill"></i> 各科室病床使用率
+                                    </div>
+                                    <div class="card-body text-center d-flex flex-column align-items-center justify-content-center" style="min-height:160px;background:linear-gradient(180deg,rgba(13,110,253,0.05),#fff)">
+                                        <div style="font-size:40px;color:#0d6efd;opacity:0.8"><i class="bi bi-bar-chart-fill"></i></div>
+                                        <p class="text-muted small mt-1 mb-2 px-2">动态1-24h · 柱状+折线 · 前3天对比</p>
+                                        <div class="mt-auto pt-1"><span class="btn btn-primary btn-sm px-4 rounded-pill"><i class="bi bi-play-circle"></i> 预览</span></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="/preview/2" target="_blank" class="text-decoration-none">
+                                <div class="card border-0 shadow-sm h-100 screen-card" style="border-radius:12px;overflow:hidden;">
+                                    <div class="card-header text-white text-center py-2 fw-bold" style="background:linear-gradient(135deg,#dc3545,#b02a37);border:none;font-size:14px">
+                                        <i class="bi bi-activity"></i> 医院床位占用率
+                                    </div>
+                                    <div class="card-body text-center d-flex flex-column align-items-center justify-content-center" style="min-height:160px;background:linear-gradient(180deg,rgba(220,53,69,0.05),#fff)">
+                                        <div style="font-size:40px;color:#dc3545;opacity:0.8"><i class="bi bi-activity"></i></div>
+                                        <p class="text-muted small mt-1 mb-2 px-2">所有医院整体占用率 · 柱状+折线</p>
+                                        <div class="mt-auto pt-1"><span class="btn btn-danger btn-sm px-4 rounded-pill"><i class="bi bi-play-circle"></i> 预览</span></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="/preview/3" target="_blank" class="text-decoration-none">
+                                <div class="card border-0 shadow-sm h-100 screen-card" style="border-radius:12px;overflow:hidden;">
+                                    <div class="card-header text-white text-center py-2 fw-bold" style="background:linear-gradient(135deg,#198754,#157347);border:none;font-size:14px">
+                                        <i class="bi bi-bar-chart-steps"></i> 各科室空闲病床数
+                                    </div>
+                                    <div class="card-body text-center d-flex flex-column align-items-center justify-content-center" style="min-height:160px;background:linear-gradient(180deg,rgba(25,135,84,0.05),#fff)">
+                                        <div style="font-size:40px;color:#198754;opacity:0.8"><i class="bi bi-bar-chart-steps"></i></div>
+                                        <p class="text-muted small mt-1 mb-2 px-2">柱状+折线 · 日志流 · 医院轮播</p>
+                                        <div class="mt-auto pt-1"><span class="btn btn-success btn-sm px-4 rounded-pill"><i class="bi bi-play-circle"></i> 预览</span></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="/preview/4" target="_blank" class="text-decoration-none">
+                                <div class="card border-0 shadow-sm h-100 screen-card" style="border-radius:12px;overflow:hidden;">
+                                    <div class="card-header text-white text-center py-2 fw-bold" style="background:linear-gradient(135deg,#ffc107,#d39e00);border:none;font-size:14px">
+                                        <i class="bi bi-map"></i> 病床分布图
+                                    </div>
+                                    <div class="card-body text-center d-flex flex-column align-items-center justify-content-center" style="min-height:160px;background:linear-gradient(180deg,rgba(255,193,7,0.08),#fff)">
+                                        <div style="font-size:40px;color:#d39e00;opacity:0.8"><i class="bi bi-map"></i></div>
+                                        <p class="text-muted small mt-1 mb-2 px-2">2D模拟地图 · 8种拓扑 · 动态床位</p>
+                                        <div class="mt-auto pt-1"><span class="btn btn-warning btn-sm px-4 rounded-pill"><i class="bi bi-play-circle"></i> 预览</span></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="/preview/5" target="_blank" class="text-decoration-none">
+                                <div class="card border-0 shadow-sm h-100 screen-card" style="border-radius:12px;overflow:hidden;">
+                                    <div class="card-header text-white text-center py-2 fw-bold" style="background:linear-gradient(135deg,#6f42c1,#5a32a3);border:none;font-size:14px">
+                                        <i class="bi bi-graph-up"></i> 科室占用率对称双轴
+                                    </div>
+                                    <div class="card-body text-center d-flex flex-column align-items-center justify-content-center" style="min-height:160px;background:linear-gradient(180deg,rgba(111,66,193,0.05),#fff)">
+                                        <div style="font-size:40px;color:#6f42c1;opacity:0.8"><i class="bi bi-graph-up"></i></div>
+                                        <p class="text-muted small mt-1 mb-2 px-2">双轴混合图 · 占用率+空闲床 · 4天对比</p>
+                                        <div class="mt-auto pt-1"><span class="btn" style="background:#6f42c1;color:#fff;font-size:13px;padding:3px 16px;border-radius:20px"><i class="bi bi-play-circle"></i> 预览</span></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="/preview/6" target="_blank" class="text-decoration-none">
+                                <div class="card border-0 shadow-sm h-100 screen-card" style="border-radius:12px;overflow:hidden;">
+                                    <div class="card-header text-white text-center py-2 fw-bold" style="background:linear-gradient(135deg,#fd7e14,#d96c0b);border:none;font-size:14px">
+                                        <i class="bi bi-geo-alt"></i> 香港医院资源总览
+                                    </div>
+                                    <div class="card-body text-center d-flex flex-column align-items-center justify-content-center" style="min-height:160px;background:linear-gradient(180deg,rgba(253,126,20,0.05),#fff)">
+                                        <div style="font-size:40px;color:#fd7e14;opacity:0.8"><i class="bi bi-geo-alt"></i></div>
+                                        <p class="text-muted small mt-1 mb-2 px-2">ECharts地图 · 6家医院定位 · 占用率</p>
+                                        <div class="mt-auto pt-1"><span class="btn" style="background:#fd7e14;color:#fff;font-size:13px;padding:3px 16px;border-radius:20px"><i class="bi bi-play-circle"></i> 预览</span></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 数据查询 -->
+                <div class="tab-page" id="tab-query">
+                    <h4 class="mb-3"><i class="bi bi-search"></i> 数据查询</h4>
+                    <div class="card shadow-sm mb-3"><div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4"><label class="form-label">医院</label><select class="form-select" id="qHosp"><option value="">-- 请选择 --</option></select></div>
+                            <div class="col-md-3"><label class="form-label">科室</label><select class="form-select" id="qDept"><option value="">全部</option></select></div>
+                            <div class="col-md-3"><label class="form-label">姓名关键词</label><input class="form-control" id="qKw" placeholder="..."></div>
+                            <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" onclick="queryData()">查询</button></div>
+                        </div>
+                    </div></div>
+                    <ul class="nav nav-tabs mb-2" id="queryNav">
+                        <li class="nav-item"><a class="nav-link active" href="#" data-qt="pat">病人信息</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" data-qt="mnt">维修记录</a></li>
+                    </ul>
+                    <div id="qPatPane"><div class="table-responsive" style="max-height:500px"><table class="table table-sm table-hover"><thead class="table-light sticky-top"><tr><th>床位号</th><th>姓名</th><th>类型</th><th>入院</th><th>出院</th><th>科室</th></tr></thead><tbody id="qPatBody"><tr><td colspan="6" class="text-center text-muted py-3">请选择医院后查询</td></tr></tbody></table></div></div>
+                    <div id="qMntPane" style="display:none"><div class="table-responsive" style="max-height:500px"><table class="table table-sm table-hover"><thead class="table-light sticky-top"><tr><th>床位号</th><th>开始</th><th>结束</th><th>科室</th></tr></thead><tbody id="qMntBody"><tr><td colspan="4" class="text-center text-muted py-3">请选择医院后查询</td></tr></tbody></table></div></div>
+                </div>
+
+                <!-- 文件管理 -->
+                <div class="tab-page" id="tab-files">
+                    <h4 class="mb-3"><i class="bi bi-files"></i> 文件管理</h4>
+                    <div class="card shadow-sm"><div class="card-body">
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-muted" id="fileCnt">共 0 个文件</span>
+                            <a href="/api/download_all" class="btn btn-success"><i class="bi bi-download"></i> 下载全部(ZIP)</a>
+                        </div>
+                        <table class="table table-hover"><thead class="table-light"><tr><th>文件名</th><th>大小</th><th>修改时间</th><th>操作</th></tr></thead><tbody id="fileListBody"><tr><td colspan="4" class="text-center text-muted py-3">暂无文件</td></tr></tbody></table>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // ── 左侧Tab切换 ──
+    document.querySelectorAll('[data-tab]').forEach(el => {
+        el.addEventListener('click', e => {
+            e.preventDefault();
+            document.querySelectorAll('[data-tab]').forEach(a => a.classList.remove('active'));
+            document.querySelectorAll('.tab-page').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('tab-' + el.dataset.tab).classList.add('active');
+            if (el.dataset.tab === 'query') loadQueryHosp();
+            if (el.dataset.tab === 'files') loadFiles();
+        });
+    });
+
+    // ── 查询子Tab ──
+    document.querySelectorAll('#queryNav .nav-link').forEach(el => {
+        el.addEventListener('click', e => {
+            e.preventDefault();
+            document.querySelectorAll('#queryNav .nav-link').forEach(a => a.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('qPatPane').style.display = el.dataset.qt === 'pat' ? 'block' : 'none';
+            document.getElementById('qMntPane').style.display = el.dataset.qt === 'mnt' ? 'block' : 'none';
+        });
+    });
+
+    // ── 模拟日期 ──
+    function setSimDate(el) {
+        const val = el?.value || document.getElementById('simDateCfg')?.value || '2026-01-15';
+        fetch('/api/set_simulated_date', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:val})})
+        .then(() => { if(typeof loadHospOccTable==='function')loadHospOccTable(); if(typeof loadDeptSummary==='function')loadDeptSummary(); });
+    }
+
+    // ── 页面加载 ──
+    document.addEventListener('DOMContentLoaded', () => {
+        fetch('/api/init').then(r=>r.json()).then(d => { if(d.success) document.getElementById('ovHospitals').textContent = d.hospitals; });
+        loadHospOccTable();
+        loadDeptSummary();
+        loadFiles();
+        setInterval(loadFiles, 5000);
+    });
+
+    function loadHospOccTable() {
+        const simDate = document.getElementById('simDateCfg')?.value || '2026-01-15';
+        fetch('/api/hospital_occupancy' + (simDate ? '?date='+simDate : '')).then(r=>r.json()).then(data => {
+            const tb = document.getElementById('hospOccBody');
+            if (!data.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">暂无</td></tr>'; return; }
+            let h = '', b = 0, d = 0;
+            data.forEach(x => {
+                b += x.beds; d += x.departments;
+                const color = x.rate >= 85 ? '#dc3545' : x.rate >= 70 ? '#ffc107' : '#198754';
+                h += `<tr><td><strong>${x.name}</strong></td><td>${x.region}</td><td>${x.departments}</td><td>${x.beds}</td><td>${x.occupied}</td><td>${x.idle}</td><td><span class="badge bg-${x.rate>=85?'danger':x.rate>=70?'warning':'success'}" style="width:60px">${x.rate}%</span></td></tr>`;
+            });
+            tb.innerHTML = h;
+            document.getElementById('ovDepts').textContent = d;
+            document.getElementById('ovBeds').textContent = b;
+        });
+    }
+
+    function loadDeptSummary() {
+        const simDate = document.getElementById('simDateCfg')?.value || '2026-01-15';
+        fetch('/api/dept_summary' + (simDate ? '?date='+simDate : '')).then(r=>r.json()).then(data => {
+            const tb = document.getElementById('deptSumBody');
+            if (!data.length) { tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">暂无</td></tr>'; return; }
+            let h = '';
+            data.forEach(x => {
+                const color = x.rate >= 85 ? '#dc3545' : x.rate >= 70 ? '#ffc107' : '#198754';
+                h += `<tr><td><strong>${x.name}</strong></td><td>${x.hospital_count}所</td><td>${x.total_beds}</td><td>${x.occupied}</td><td>${x.idle}</td><td><span class="badge bg-${x.rate>=85?'danger':x.rate>=70?'warning':'success'}" style="width:60px">${x.rate}%</span></td></tr>`;
+            });
+            tb.innerHTML = h;
+        });
+    }
+
+    // ── 数据生成 ──
+    let genPolling = false;
+    function startGenerate() {
+        const btn = document.getElementById('genBtn');
+        btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
+        document.getElementById('progressSection').classList.remove('d-none');
+        document.getElementById('genLog').classList.remove('d-none');
+        addLog('🔧 开始生成（自动清除旧数据）...');
+        fetch('/api/generate', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start_date:document.getElementById('genStart').value,end_date:document.getElementById('genEnd').value})})
+        .then(r=>r.json()).then(d => { if(d.success) { addLog('✅ 任务已启动'); genPolling = true; pollProgress(); } else { addLog('❌ '+d.error); btn.disabled = false; btn.innerHTML = '<i class="bi bi-play-fill"></i> 生成模拟数据'; }});
+    }
+
+    function pollProgress() {
+        if (!genPolling) return;
+        fetch('/api/generate_progress').then(r=>r.json()).then(d => {
+            const det = document.getElementById('progressDetails');
+            let tp = 0, c = 0, h = '';
+            for (const [hid, info] of Object.entries(d.progress)) { tp += info.pct; c++; const cl = info.status === 'completed' ? 'success' : info.status === 'error' ? 'danger' : 'primary'; h += `<div class="col-md-4"><div class="d-flex justify-content-between"><small>${info.hospital_name}</small><small>${info.pct}%</small></div><div class="progress" style="height:6px"><div class="progress-bar bg-${cl}" style="width:${info.pct}%"></div></div></div>`; if(info.status==='completed')addLog('✅ '+info.hospital_name+': 完成'); if(info.status==='error')addLog('❌ '+info.hospital_name+': '+info.error); }
+            det.innerHTML = h;
+            if (c > 0) { const a = tp / c; document.getElementById('mainProgress').style.width = a + '%'; document.getElementById('mainProgress').textContent = Math.round(a) + '%'; }
+            if (d.running) { setTimeout(pollProgress, 500); }
+            else {
+                genPolling = false; addLog('✅ 全部生成完毕！缓存已预热');
+                document.getElementById('genBtn').disabled = false; document.getElementById('genBtn').innerHTML = '<i class="bi bi-play-fill"></i> 生成模拟数据';
+                loadFiles(); document.getElementById('ovFiles').textContent = '?'; fetch('/api/generated_files').then(r=>r.json()).then(f => document.getElementById('ovFiles').textContent = f.length);
+            }
+        });
+    }
+    function addLog(m) { const e = document.getElementById('genLogText'); e.textContent += '['+new Date().toLocaleTimeString()+'] '+m+'\n'; e.scrollTop = e.scrollHeight; }
+
+    // ── 数据查询 ──
+    function loadQueryHosp() {
+        fetch('/api/hospitals').then(r=>r.json()).then(data => {
+            const sel = document.getElementById('qHosp'); sel.innerHTML = '<option value="">-- 请选择 --</option>';
+            data.forEach(h => sel.innerHTML += `<option value="${h.id}">${h.name}</option>`);
+        });
+    }
+
+    function queryData() {
+        const hid = document.getElementById('qHosp').value, dept = document.getElementById('qDept').value, kw = document.getElementById('qKw').value;
+        if (!hid) return;
+        fetch('/api/dept_list?hospital='+hid).then(r=>r.json()).then(depts => { const sel = document.getElementById('qDept'); sel.innerHTML = '<option value="">全部</option>'; depts.forEach(d => sel.innerHTML += `<option value="${d.name}">${d.name}</option>`); });
+        fetch('/api/query_patients?hospital='+hid+'&dept='+dept+'&keyword='+kw).then(r=>r.json()).then(d => { const tb = document.getElementById('qPatBody'); if(!d.data||!d.data.length){tb.innerHTML='<tr><td colspan="6" class="text-center text-muted py-3">无数据</td></tr>';return;} let h=''; d.data.forEach(r=>{h+=`<tr><td><code>${r.床位号}</code></td><td>${r.病人姓名}</td><td><span class="badge bg-info">${r.病人类型}</span></td><td>${r.入院时间}</td><td>${r.出院时间}</td><td>${r.科室名称}</td></tr>`;}); tb.innerHTML=h; });
+        fetch('/api/query_maintenance?hospital='+hid).then(r=>r.json()).then(d => { const tb = document.getElementById('qMntBody'); if(!d.data||!d.data.length){tb.innerHTML='<tr><td colspan="4" class="text-center text-muted py-3">无数据</td></tr>';return;} let h=''; d.data.forEach(r=>{h+=`<tr><td><code>${r.床位号}</code></td><td>${r.维修开始时间}</td><td>${r.维修结束时间}</td><td>${r.科室名称}</td></tr>`;}); tb.innerHTML=h; });
+    }
+
+    // ── 文件管理 ──
+    function loadFiles() {
+        fetch('/api/generated_files').then(r=>r.json()).then(files => {
+            document.getElementById('fileCnt').textContent = '共 '+files.length+' 个文件';
+            const tb = document.getElementById('fileListBody');
+            if (!files.length) { tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">暂无</td></tr>'; document.getElementById('ovFiles').textContent = '0'; return; }
+            let h = ''; files.forEach(f => { h += `<tr><td><i class="bi bi-file-earmark-text"></i> ${f.filename}</td><td>${f.size_str}</td><td>${f.modified}</td><td><a href="/api/download/${f.filename}" class="btn btn-sm btn-outline-primary"><i class="bi bi-download"></i> 下载</a></td></tr>`; });
+            tb.innerHTML = h; document.getElementById('ovFiles').textContent = files.length;
+        });
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>医疗机构病床使用率多维监控大屏</title>
+    <style>
+        /* 基础样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #030811;
+            color: #ffffff;
+            font-family: "Helvetica Neue", Helvetica, "PingFang SC", Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* 大屏幕布局 */
+        .dashboard-container {
+            width: 100%;
+            height: 100%;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(circle at 50% 50%, #08162b 0%, #030811 100%);
+        }
+
+        /* 头部大标题 */
+        .header {
+            height: 60px;
+            width: 100%;
+            position: relative;
+            text-align: center;
+            border-bottom: 1px solid rgba(0, 168, 255, 0.3);
+            margin-bottom: 24px;
+        }
+        .header h1 {
+            font-size: 26px;
+            color: #00f0ff;
+            letter-spacing: 3px;
+            line-height: 50px;
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+        }
+        .header .sub-info {
+            position: absolute;
+            right: 10px;
+            bottom: 12px;
+            font-size: 13px;
+            color: #617385;
+        }
+        .header .carousel-tag {
+            position: absolute;
+            left: 10px;
+            bottom: 12px;
+            background: rgba(0, 240, 255, 0.1);
+            padding: 3px 10px;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 240, 255, 0.4);
+            font-size: 13px;
+            color: #00f0ff;
+            animation: pulse 2s infinite;
+        }
+
+        /* 核心内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            gap: 24px;
+        }
+
+        /* 左侧指标看板 */
+        .sidebar {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .card {
+            background: rgba(7, 21, 46, 0.5);
+            border: 1px solid #0f2d59;
+            border-radius: 4px;
+            padding: 18px;
+            position: relative;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 8px; height: 8px;
+            border-top: 2px solid #00a8ff; border-left: 2px solid #00a8ff;
+        }
+        .card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; right: 0; width: 8px; height: 8px;
+            border-bottom: 2px solid #00a8ff; border-right: 2px solid #00a8ff;
+        }
+        .card-title {
+            font-size: 14px;
+            color: #748899;
+            margin-bottom: 8px;
+        }
+        .card-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #00f0ff;
+            font-family: 'Impact', sans-serif;
+        }
+        .hospital-name-active {
+            font-size: 22px;
+            color: #4ba3e3;
+            text-shadow: 0 0 5px rgba(75, 163, 227, 0.3);
+            margin-top: 4px;
+        }
+
+        /* 右侧主图表区 */
+        .chart-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .legends {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        /* 混合图表容器 */
+        .canvas-container {
+            flex: 1;
+            background: rgba(5, 14, 31, 0.75);
+            border: 1px solid #0d2547;
+            border-radius: 4px;
+            position: relative;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <div class="header">
+        <div class="carousel-tag" id="carouselTag">医院轮播中...</div>
+        <h1>医疗机构病床使用率多维监控大屏</h1>
+        <div class="sub-info" id="currentTime">更新时间: 2026-06-06 00:00:00</div>
+    </div>
+
+    <div class="main-content">
+        <div class="sidebar">
+            <div class="card">
+                <div class="card-title">当前展示机构</div>
+                <div class="hospital-name-active" id="hospitalName">加载中...</div>
+            </div>
+            <div class="card">
+                <div class="card-title">全院平均床位使用率</div>
+                <div class="card-value" id="avgRate">0.0%</div>
+            </div>
+            <div class="card" style="flex: 1;">
+                <div class="card-title" style="color: #00f0ff;">大屏说明</div>
+                <p style="font-size: 13px; color: #617385; line-height: 1.8; margin-top: 10px;">
+                    • <b>轮播机制</b>：系统在不同医疗机构间循环轮播。<br>
+                    • <b>对比机制</b>：柱状图与折线图同步展示<b>当日、前1天、前2天、前3天</b>的横向跨期比对。<br>
+                    • <b>视觉调校</b>：降低了整体色彩饱和度，采用低调科技色系，适合监控大屏长时间观看。
+                </p>
+            </div>
+        </div>
+
+        <div class="chart-area">
+            <div class="chart-header">
+                <h3 style="color: #00f0ff; font-size: 15px;">科室负载对比(柱状) 与 全院24小时历史走势(折线)</h3>
+                <div class="legends">
+                    <div class="legend-item"><div class="legend-color" style="background: #3a86ff;"></div><span style="color:#a5b5c4">当日数据</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #00b4d8;"></div><span style="color:#a5b5c4">前1天</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #52b788;"></div><span style="color:#a5b5c4">前2天</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #7209b7;"></div><span style="color:#a5b5c4">前3天</span></div>
+                </div>
+            </div>
+            <div class="canvas-container" id="canvasWrapper">
+                <canvas id="mixedChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 模拟数据集 ---
+    const hospitals = [
+        { name: "市第一人民医院（总院）", baseRate: 0.76 },
+        { name: "市中医医院（东校区）", baseRate: 0.63 },
+        { name: "妇幼保健院（南院区）", baseRate: 0.81 },
+        { name: "第二人民医院（呼吸中心）", baseRate: 0.56 }
+    ];
+
+    const departments = ["ICU", "呼吸内科", "心血管科", "普外科", "骨科", "儿科", "急诊科"];
+    
+    // 雅致调和色彩板（低饱和度科技风）
+    const colors = {
+        day0: '#3a86ff', // 当日 (冷感蓝)
+        day1: '#00b4d8', // 前1天 (静谧青)
+        day2: '#52b788', // 前2天 (暗薄荷绿)
+        day3: '#7209b7'  // 前3天 (深幽紫)
+    };
+
+    let currentHospitalIndex = 0;
+    let currentHour = 1; 
+    let animationTimer = null;
+
+    const canvas = document.getElementById('mixedChart');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('canvasWrapper');
+
+    function resizeCanvas() {
+        canvas.width = wrapper.clientWidth;
+        canvas.height = wrapper.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function generateHospitalData(baseRate) {
+        let dataset = {
+            day0: [], day1: [], day2: [], day3: [], 
+            deptHistoryData: {} 
+        };
+
+        // 折线趋势
+        for(let h = 1; h <= 24; h++) {
+            let wave = Math.sin(h / 3.5) * 0.13; 
+            dataset.day0.push(Math.min(0.95, Math.max(0.15, baseRate + wave + (Math.random()*0.03 - 0.015))));
+            dataset.day1.push(Math.min(0.95, Math.max(0.15, baseRate * 0.95 + wave + (Math.random()*0.03 - 0.015))));
+            dataset.day2.push(Math.min(0.95, Math.max(0.15, baseRate * 1.04 + wave + (Math.random()*0.03 - 0.015))));
+            dataset.day3.push(Math.min(0.95, Math.max(0.15, baseRate * 0.88 + wave + (Math.random()*0.03 - 0.015))));
+        }
+        
+        // 科室4天数据
+        departments.forEach((dept, index) => {
+            dataset.deptHistoryData[dept] = { day0: [], day1: [], day2: [], day3: [] };
+            let deptModifier = (index % 3 === 0) ? 0.11 : (index % 2 === 0 ? -0.08 : 0.02);
+            
+            for(let h = 1; h <= 24; h++) {
+                let hourlyTrend = Math.sin(h / 4) * 0.05;
+                dataset.deptHistoryData[dept].day0.push(Math.min(0.98, Math.max(0.1, baseRate + deptModifier + hourlyTrend + (Math.random()*0.02 - 0.01))));
+                dataset.deptHistoryData[dept].day1.push(Math.min(0.98, Math.max(0.1, baseRate * 0.93 + deptModifier + hourlyTrend + (Math.random()*0.02 - 0.01))));
+                dataset.deptHistoryData[dept].day2.push(Math.min(0.98, Math.max(0.1, baseRate * 1.03 + deptModifier + hourlyTrend + (Math.random()*0.02 - 0.01))));
+                dataset.deptHistoryData[dept].day3.push(Math.min(0.98, Math.max(0.1, baseRate * 0.89 + deptModifier + hourlyTrend + (Math.random()*0.02 - 0.01))));
+            }
+        });
+
+        return dataset;
+    }
+
+    let activeData = generateHospitalData(hospitals[currentHospitalIndex].baseRate);
+
+    // --- 渲染引擎 ---
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const paddingLeft = 55;
+        const paddingRight = 40;
+        const paddingTop = 40;
+        const paddingBottom = 50;
+        
+        const chartWidth = canvas.width - paddingLeft - paddingRight;
+        const chartHeight = canvas.height - paddingTop - paddingBottom;
+
+        // 1. 绘制网格线
+        ctx.strokeStyle = "rgba(15, 45, 89, 0.3)";
+        ctx.lineWidth = 1;
+        ctx.fillStyle = "#5c6e7f";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "right";
+
+        for (let i = 0; i <= 5; i++) {
+            let ratio = i / 5;
+            let y = paddingTop + chartHeight * (1 - ratio);
+            ctx.beginPath();
+            ctx.moveTo(paddingLeft, y);
+            ctx.lineTo(paddingLeft + chartWidth, y);
+            ctx.stroke();
+            ctx.fillText((ratio * 100).toFixed(0) + "%", paddingLeft - 10, y + 4);
+        }
+
+        // 2. 绘制 X 轴时间刻度 (1点 到 24点)
+        ctx.textAlign = "center";
+        const xStep = chartWidth / 23; 
+        for (let h = 1; h <= 24; h++) {
+            let x = paddingLeft + (h - 1) * xStep;
+            
+            // 始终完整渲染1点到24点的坐标轴底衬
+            if (h === 1 || h === 24 || h % 3 === 1) {
+                ctx.fillStyle = h <= currentHour ? "#00f0ff" : "#3b4b5a";
+                ctx.fillText(h + "点", x, paddingTop + chartHeight + 20);
+            }
+            
+            // 扫描辅助线
+            if (h === currentHour) { 
+                ctx.strokeStyle = "rgba(0, 240, 255, 0.15)";
+                ctx.beginPath(); ctx.moveTo(x, paddingTop); ctx.lineTo(x, paddingTop + chartHeight); ctx.stroke();
+            }
+        }
+
+        // 3. 绘制：各科室当日与前三天并列对比柱状图
+        const groupCount = departments.length;
+        const groupWidth = chartWidth / groupCount; 
+        const barWidth = Math.min(9, groupWidth * 0.13); 
+        const daysKeys = ['day0', 'day1', 'day2', 'day3']; 
+
+        departments.forEach((dept, i) => {
+            let groupCenterX = paddingLeft + (groupWidth * i) + (groupWidth / 2);
+            let startX = groupCenterX - (barWidth * 4 + 3 * 2) / 2; 
+
+            daysKeys.forEach((dayKey, dayIdx) => {
+                let barX = startX + dayIdx * (barWidth + 2);
+                let rateValue = activeData.deptHistoryData[dept][dayKey][currentHour - 1];
+                let targetBarHeight = rateValue * chartHeight;
+                let barY = paddingTop + chartHeight - targetBarHeight;
+
+                // 优雅的半透明柱体填充，保证折线可见度
+                ctx.fillStyle = colors[dayKey];
+                ctx.globalAlpha = dayKey === 'day0' ? 0.75 : 0.4;
+                ctx.fillRect(barX, barY, barWidth, targetBarHeight);
+                ctx.globalAlpha = 1.0; 
+
+                // 数值标示
+                ctx.fillStyle = dayKey === 'day0' ? "#00f0ff" : "#5c6e7f";
+                ctx.font = "9px sans-serif";
+                if(dayKey === 'day0' || currentHour === 24) {
+                    ctx.fillText((rateValue * 100).toFixed(0), barX + barWidth/2, barY - 4);
+                }
+            });
+
+            // 科室底部文本
+            ctx.fillStyle = "#8a9ba8";
+            ctx.font = "12px sans-serif";
+            ctx.fillText(dept, groupCenterX, paddingTop + chartHeight + 38);
+        });
+
+        // 4. 绘制全院趋势4条多段对比线性图
+        const lineConfigs = [
+            { key: 'day3', color: colors.day3, width: 1.5, alpha: 0.5 }, 
+            { key: 'day2', color: colors.day2, width: 1.5, alpha: 0.6 }, 
+            { key: 'day1', color: colors.day1, width: 1.5, alpha: 0.7 }, 
+            { key: 'day0', color: colors.day0, width: 2.5, alpha: 1.0 }  
+        ];
+
+        lineConfigs.forEach(line => {
+            ctx.strokeStyle = line.color;
+            ctx.lineWidth = line.width;
+            ctx.globalAlpha = line.alpha;
+            ctx.beginPath();
+
+            for (let h = 1; h <= currentHour; h++) {
+                let val = activeData[line.key][h - 1];
+                let x = paddingLeft + (h - 1) * xStep;
+                let y = paddingTop + chartHeight * (1 - val);
+
+                if (h === 1) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+
+            if (currentHour > 0) {
+                let lastVal = activeData[line.key][currentHour - 1];
+                let lastX = paddingLeft + (currentHour - 1) * xStep;
+                let lastY = paddingTop + chartHeight * (1 - lastVal);
+                
+                ctx.fillStyle = line.color;
+                ctx.beginPath();
+                ctx.arc(lastX, lastY, line.width + 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+        });
+    }
+
+    // --- 大屏业务控制与时钟推进 ---
+    function updateDashboard() {
+        document.getElementById('hospitalName').innerText = hospitals[currentHospitalIndex].name;
+        
+        let currentTotalAvg = activeData.day0[currentHour - 1];
+        document.getElementById('avgRate').innerText = (currentTotalAvg * 100).toFixed(1) + "%";
+
+        let now = new Date();
+        document.getElementById('currentTime').innerText = "自动轮播中 | " + now.toLocaleTimeString();
+
+        render();
+
+        // 0.5秒推进一个时段
+        if (currentHour < 24) {
+            currentHour++;
+        } else {
+            currentHour = 1;
+            currentHospitalIndex = (currentHospitalIndex + 1) % hospitals.length;
+            activeData = generateHospitalData(hospitals[currentHospitalIndex].baseRate);
+            
+            const tag = document.getElementById('carouselTag');
+            tag.innerText = "无缝切换新机构...";
+            setTimeout(() => {
+                tag.innerText = "医院轮播中...";
+            }, 1000);
+        }
+    }
+
+    // 初始化步进
+    updateDashboard();
+    animationTimer = setInterval(updateDashboard, 500);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#030811;color:#fff;font-family:"Helvetica Neue",Helvetica,"PingFang SC",Arial,sans-serif;overflow:hidden;height:100vh}
+.dashboard-container{width:100%;height:100%;padding:20px 24px;display:flex;flex-direction:column;background:radial-gradient(circle at 50% 50%,#08162b 0%,#030811 100%)}
+.header{height:50px;width:100%;position:relative;text-align:center;border-bottom:1px solid rgba(0,168,255,.3);margin-bottom:15px}
+.header h1{font-size:24px;color:#00f0ff;letter-spacing:3px;line-height:40px;text-shadow:0 0 8px rgba(0,240,255,.3)}
+.header .sub-info{position:absolute;right:10px;bottom:12px;font-size:13px;color:#617385}
+.header .carousel-tag{position:absolute;left:10px;bottom:12px;background:rgba(0,240,255,.1);padding:3px 10px;border-radius:3px;border:1px solid rgba(0,240,255,.4);font-size:13px;color:#00f0ff}
+.main-content{flex:1;display:flex;gap:0;min-height:0;position:relative}
+.card{background:rgba(7,21,46,.5);border:1px solid #0f2d59;border-radius:4px;padding:16px;position:relative}
+.card::before{content:'';position:absolute;top:0;left:0;width:8px;height:8px;border-top:2px solid #00a8ff;border-left:2px solid #00a8ff}
+.card::after{content:'';position:absolute;bottom:0;right:0;width:8px;height:8px;border-bottom:2px solid #00a8ff;border-right:2px solid #00a8ff}
+.card-title{font-size:13px;color:#617385;margin-bottom:6px}
+.card-value{font-size:32px;font-weight:bold;font-family:'Impact',sans-serif;text-shadow:0 0 10px rgba(0,240,255,.15)}
+.canvas-wrapper{flex:1;background:rgba(5,14,31,.75);border:1px solid #0d2547;border-radius:4px;position:relative;overflow:hidden}
+.canvas-wrapper canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.legends{display:flex;gap:15px;font-size:12px}
+.legend-item{display:flex;align-items:center;gap:5px}
+.legend-box{width:12px;height:12px;border-radius:2px}
+.sidebar{width:280px;display:flex;flex-direction:column;gap:14px;flex-shrink:0;min-height:0}
+.flex-col{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.hospital-name-active{font-size:20px;color:#4ba3e3;text-shadow:0 0 5px rgba(75,163,227,.3);margin-top:4px}
+.card-value.highlight-red{color:#ff4d4d;text-shadow:0 0 10px rgba(255,77,77,.3)}
+.sidebar-left{width:280px;display:flex;flex-direction:column;gap:14px;flex-shrink:0}
+.value-green{color:#06d6a0}
+.value-cyan{color:#00f0ff}
+.sidebar-right{width:300px;min-height:0;background:rgba(4,14,33,.85);border:1px solid #0c2b5c;border-radius:4px;display:flex;flex-direction:column;padding:14px;flex-shrink:0}
+.log-title{font-size:13px;color:#00f0ff;font-weight:bold;padding-bottom:6px;border-bottom:1px solid rgba(0,240,255,.2);margin-bottom:8px;display:flex;justify-content:space-between}
+.log-stream{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;font-family:'Courier New',monospace;font-size:11px}
+.log-item{padding:5px 8px;background:rgba(255,255,255,.02);border-left:3px solid #617385;border-radius:2px;line-height:1.4}
+.log-item.in{border-left-color:#ff4d4d;background:rgba(255,77,77,.04);color:#ff6b6b}
+.log-item.out{border-left-color:#06d6a0;background:rgba(6,214,160,.04);color:#06d6a0}
+.log-item b{color:#fff}
+.floor-container{max-height:350px;overflow-y:auto;margin-top:6px}
+.floor-group-title{font-size:12px;color:#00f0ff;margin-top:8px;margin-bottom:3px;font-weight:bold;border-left:2px solid #00f0ff;padding-left:6px}
+.floor-item{font-size:11px;color:#a5b5c4;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);display:flex;justify-content:space-between}
+.map-container{flex:1;min-height:0;background:#030d22;border:1px solid #0c2b5c;border-radius:4px;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 30px rgba(0,240,255,.08);overflow:hidden;position:relative}
+.map-container canvas{display:block;width:100%;height:100%}
+.screen-indicator{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:20}
+.screen-indicator .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.2);transition:all .3s;cursor:pointer}
+.screen-indicator .dot.active{background:#00f0ff;box-shadow:0 0 8px #00f0ff;width:24px;border-radius:4px}
+.screen-container{flex:1;position:relative;overflow:hidden}
+.screen-page{display:none;padding:0}
+.screen-page.active{display:flex;flex:1}
+</style>
+</head>
+<body><div class="dashboard-container">
+{% if single_screen and single_screen > 0 %}{% set s = single_screen %}
+{% else %}{% set s = 0 %}{% endif %}
+<div class="header">
+{% if not single_screen or single_screen == 0 %}<div class="carousel-tag" id="carouselTag">医院轮播中...</div>{% endif %}
+<h1 id="mainTitle" style="font-size:{{ '20px' if not single_screen or single_screen==0 else '24px' }}">医疗机构病床使用率多维监控大屏</h1>
+<div class="sub-info" id="currentTime">更新时间: --:--:--</div>
+<div id="s1HospitalBadge" style="background:rgba(0,240,255,.12);border:1px solid rgba(0,240,255,.3);border-radius:20px;padding:1px 14px;font-size:14px;color:#00f0ff;font-weight:bold;position:absolute;left:10px;bottom:12px;">🏥 <span id="s1HospitalBadgeName">加载中</span></div>
+</div>
+<div class="main-content">
+
+<!-- ═══ 屏1: 各科室病床使用率 ═══ -->
+<div class="screen-page {{ 'active' if s==1 or s==0 else '' }}" data-screen="1" id="screen1">
+<div class="sidebar">
+<div class="card"><div class="card-title">当前展示机构</div><div class="hospital-name-active" id="s1HospitalName">加载中...</div></div>
+<div class="card"><div class="card-title">全院平均床位使用率</div><div class="card-value" id="s1AvgRate">0.0%</div></div>
+<div class="card" style="flex:1"><div class="card-title" style="color:#00f0ff">大屏说明</div>
+<p style="font-size:13px;color:#617385;line-height:1.8;margin-top:8px">
+• <b>轮播机制</b>：系统在不同医疗机构间循环轮播。<br>
+• <b>对比机制</b>：柱状图与折线图同步展示<b>当日、前1天、前2天、前3天</b>的横向跨期比对。<br>
+• <b>视觉调校</b>：采用低调科技色系，适合监控大屏长时间观看。</p></div></div>
+<div class="flex-col">
+<div class="chart-header">
+<h3 style="color:#00f0ff;font-size:14px" id="s1ChartTitle">科室负载对比(柱状) 与 全院24H趋势(折线)</h3>
+<div class="legends">
+<span class="legend-item"><span class="legend-box" style="background:#3a86ff"></span><span style="color:#a5b5c4">当日</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#00b4d8"></span><span style="color:#a5b5c4">前1天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#52b788"></span><span style="color:#a5b5c4">前2天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#7209b7"></span><span style="color:#a5b5c4">前3天</span></span>
+</div></div>
+<div class="canvas-wrapper" id="s1Wrapper"><canvas id="s1Canvas"></canvas></div></div></div>
+
+<!-- ═══ 屏2: 医院床位占用率 ═══ -->
+<div class="screen-page {{ 'active' if s==2 else '' }}" data-screen="2" id="screen2">
+<div class="sidebar">
+<div class="card"><div class="card-title">监测医疗机构</div><div style="font-size:20px;color:#00f0ff;margin-top:4px" id="s2HospitalCount">0 所</div></div>
+<div class="card"><div class="card-title">全辖区当日实时平均占用率</div><div class="card-value highlight-red" id="s2GlobalAvgRate">0.0%</div></div>
+<div class="card" style="flex:1"><div class="card-title" style="color:#00f0ff">色彩说明</div>
+<p style="font-size:13px;color:#617385;line-height:1.8;margin-top:8px">
+• <b style="color:#ff4d4d;">当日 (红)</b>：核心聚焦。<b style="color:#ffb703;">前1天 (黄)</b>、<b style="color:#06d6a0;">前2天 (绿)</b>、<b style="color:#118ab2;">前3天 (蓝)</b>。<br>
+• <b>动态追踪</b>：0.5秒/小时推进。柱状图刷新各医院4天占用率落差。</p></div></div>
+<div class="flex-col">
+<div class="chart-header" style="position:relative">
+<h3 style="color:#00f0ff;font-size:14px" id="s2ChartTitle">各医院整体占用率(柱状) 与 全域24H趋势(折线)</h3>
+<div class="legends">
+<span class="legend-item"><span class="legend-box" style="background:#ff4d4d"></span><span style="color:#fff;font-weight:bold">当日</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#ffb703"></span><span style="color:#a5b5c4">前1天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#06d6a0"></span><span style="color:#a5b5c4">前2天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#118ab2"></span><span style="color:#a5b5c4">前3天</span></span>
+</div></div>
+<div class="canvas-wrapper" id="s2Wrapper"><canvas id="s2Canvas"></canvas></div></div></div>
+
+<!-- ═══ 屏3: 各科室空闲病床数 ═══ -->
+<div class="screen-page {{ 'active' if s==3 else '' }}" data-screen="3" id="screen3">
+<div class="sidebar-left">
+<div class="card"><div class="card-title"><i class="bi bi-hospital" style="color:#ff9f43"></i> 当前监察机构</div><div class="hospital-name-active" style="color:#ff9f43" id="s3HospitalName">加载中...</div></div>
+<div class="card"><div class="card-title"><i class="bi bi-clock" style="color:#00f0ff"></i> 时间轴当前截面</div><div class="card-value value-cyan" id="s3HourLabel">1 点</div></div>
+<div class="card"><div class="card-title"><i class="bi bi-bed" style="color:#06d6a0"></i> 全院可用空闲床位</div><div class="card-value value-green" id="s3FreeBedsTotal">0 张</div></div>
+<div class="card" style="flex:1"><div class="card-title" style="color:#00f0ff;font-weight:bold">时空联动逻辑</div>
+<p style="font-size:12px;color:#617385;line-height:1.8;margin-top:6px">
+• <b>0.5秒动态推进</b>：时间轴由1点顺延至24点。<br>
+• <b>全量并列对比</b>：柱状图同步刷新<b>当天与前3天</b>的落差。<br>
+• <b>右侧日志流</b>：每走过一小时同步弹现入住与出院记录。</p></div></div>
+<div class="flex-col">
+<div class="chart-header" style="position:relative">
+<h3 style="color:#00f0ff;font-size:14px" id="s3ChartTitle">科室空闲床对比(柱状) 与 全院24H趋势(折线)</h3>
+<div class="legends">
+<span class="legend-item"><span class="legend-box" style="background:#ff4d4d"></span><span style="color:#fff;font-weight:bold">当天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#ffb703"></span><span style="color:#a5b5c4">前1天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#06d6a0"></span><span style="color:#a5b5c4">前2天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#118ab2"></span><span style="color:#a5b5c4">前3天</span></span>
+</div></div>
+<div class="canvas-wrapper" id="s3Wrapper"><canvas id="s3Canvas"></canvas></div></div>
+<div class="sidebar-right">
+<div class="log-title"><span>临床调度流水</span><span style="color:#617385;font-size:11px" id="s3LogCount">0条</span></div>
+<div class="log-stream" id="s3LogStream"></div></div></div>
+
+<!-- ═══ 屏4: 病床分布图 ═══ -->
+<div class="screen-page {{ 'active' if s==4 else '' }}" data-screen="4" id="screen4">
+<div class="sidebar">
+<div class="card"><div class="card-title">当前锁定院区</div><div style="color:#ff9f43;font-size:15px;font-weight:bold;margin-top:4px" id="s4HospitalName">加载中...</div></div>
+<div class="card"><div class="card-title">全院床位总资产</div><div class="card-value" style="font-size:24px;color:#00f0ff" id="s4TotalBeds">0 张</div>
+<div style="display:flex;gap:12px;margin-top:4px;font-size:13px">
+<span style="color:#ff5e5e">占用: <span id="s4OccCount">0</span></span>
+<span style="color:#1dd1a1">空闲: <span id="s4IdleCount">0</span></span>
+<span style="color:#FFC107">维修: <span id="s4MaintCount">0</span></span>
+</div></div>
+<div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+<div class="card-title" style="color:#00f0ff;font-weight:bold;margin-bottom:4px">大楼层级分布</div>
+<div class="floor-container" id="s4FloorContainer"></div></div></div>
+<div class="flex-col">
+<div class="chart-header" style="position:relative">
+<h3 style="color:#00f0ff;font-size:13px" id="s4MapTitle">端点截断线与全域散射建筑空间图</h3>
+<div class="legends">
+<span class="legend-item"><span class="legend-box" style="background:rgba(17,54,114,.75);border:1px solid #00f0ff"></span><span style="color:#fff">综合大楼</span></span>
+<span class="legend-item"><span class="legend-box" style="background:rgba(130,30,30,.6);border:1px solid #ff4d4d"></span><span style="color:#fff">急诊中心</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#25332c"></span><span style="color:#fff">主干道路</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#e056fd;height:4px;width:16px"></span><span style="color:#fff">大门截断线</span></span>
+</div></div>
+<div class="map-container" id="s4MapWrapper"><canvas id="s4Canvas"></canvas></div></div></div>
+<!-- ═══ 屏5: 科室占用率对称双轴 ═══ -->
+<div class="screen-page {{ 'active' if s==5 else '' }}" data-screen="5" id="screen5">
+<div class="sidebar" style="width:240px">
+<div class="card"><div class="card-title">当前计算时间截面</div><div class="card-value value-cyan" id="s5HourLabel">1 点</div></div>
+<div class="card"><div class="card-title">全区当日平均占用率</div><div class="card-value highlight-red" id="s5AvgRate">0.0%</div></div>
+<div class="card"><div class="card-title">全区空闲床位总量</div><div class="card-value value-green" id="s5FreeTotal">0 张</div></div>
+<div class="card" style="flex:1"><div class="card-title" style="color:#00f0ff">对称双轴说明</div>
+<p style="font-size:12px;color:#617385;line-height:1.7;margin-top:6px">
+• <b>4柱并列（左轴）</b>：各科室<b>当日及前3天</b>占用率对比。<br>
+• <b>4线延展（右轴）</b>：全区空闲床位总量<b>当日及前3天</b>趋势。<br>
+• <b>颜色联动</b>：柱线颜色一一对应。</p></div></div>
+<div class="flex-col">
+<div class="chart-header">
+<h3 style="color:#00f0ff;font-size:14px" id="s5ChartTitle">各科室占用率(柱状/左轴) 与 全区空闲床(折线/右轴)</h3>
+<div class="legends">
+<span class="legend-item"><span class="legend-box" style="background:#ff4d4d"></span><span style="color:#fff;font-weight:bold">当日</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#ffb703"></span><span style="color:#a5b5c4">前1天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#06d6a0"></span><span style="color:#a5b5c4">前2天</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#118ab2"></span><span style="color:#a5b5c4">前3天</span></span>
+</div></div>
+<div class="canvas-wrapper" id="s5Wrapper"><canvas id="s5Canvas"></canvas></div></div>
+<div class="sidebar-right" style="width:280px">
+<div class="log-title"><span>全区空闲科室流水</span><span style="color:#617385;font-size:11px" id="s5LogCount">0条</span></div>
+<div class="log-stream" id="s5LogStream"></div></div></div>
+
+<!-- ═══ 屏6: 香港医院资源总览 ═══ -->
+<div class="screen-page {{ 'active' if s==6 else '' }}" data-screen="6" id="screen6">
+<div class="sidebar" style="width:300px">
+<div class="card"><div class="card-title">全港综合病床占用率</div><div class="card-value highlight-red" id="s6AvgRate">0.0%</div></div>
+<div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+<div class="card-title" style="color:#00f0ff;font-weight:bold;margin-bottom:4px">联网医院数据流</div>
+<div class="hospital-status-row" style="font-weight:bold;color:#fff;display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span>院区</span><span>占用率</span></div>
+<div id="s6HospList" style="flex:1;overflow-y:auto"></div></div></div>
+<div class="flex-col">
+<div class="chart-header">
+<h3 style="color:#00f0ff;font-size:14px" id="s6MapTitle">香港区域医院床位资源分布</h3>
+<div class="legends">
+<span class="legend-item"><span class="legend-box" style="background:rgba(11,35,77,.4);border:1px solid #0b478f"></span><span style="color:#fff">香港行政区</span></span>
+<span class="legend-item"><span class="legend-box" style="background:#ff4d4d;border-radius:50%;width:10px;height:10px"></span><span style="color:#fff">医疗机构</span></span>
+</div></div>
+<div class="map-container" id="s6MapWrapper" style="background:#030d22;box-shadow:inset 0 0 30px rgba(0,240,255,.08);overflow:hidden"><div id="s6EChart" style="width:100%;height:100%"></div></div></div></div>
+</div></div></div>
+</div>
+
+{% if not single_screen or single_screen == 0 %}
+<div class="screen-indicator">
+<div class="dot active" data-dot="0"></div><div class="dot" data-dot="1"></div><div class="dot" data-dot="2"></div><div class="dot" data-dot="3"></div><div class="dot" data-dot="4"></div><div class="dot" data-dot="5"></div>
+</div>{% endif %}
+</div>
+
+<script>
+const C1={d0:'#3a86ff',d1:'#00b4d8',d2:'#52b788',d3:'#7209b7'};
+const C2={d0:'#ff4d4d',d1:'#ffb703',d2:'#06d6a0',d3:'#118ab2'};
+const HT=['CROSS','WAVE','Y_SHAPE','X_SHAPE','Z_SHAPE','C_SHAPE','P_SHAPE','NONE_STAR'];
+const HTN={'CROSS':'经典【十字型】轴线','WAVE':'柔性【波浪型】曲线','Y_SHAPE':'辐射【Y型】三叉戟','X_SHAPE':'对角【X型】枢纽','Z_SHAPE':'折线【Z型】闪电','C_SHAPE':'合抱【C型】半椭圆','P_SHAPE':'回环【P型】环岛','NONE_STAR':'去中心星状分叉'};
+const BP=['综合','急救','第一','第二','临床','华康','博爱','健民','仁济'];
+const BS=['住院楼','内科大楼','外科中心','急救主楼','重症大楼','诊疗大厅'];
+const FF=['5F 特需VIP病区','4F 住院层','3F 住院层','2F ICU','1F 大厅','4F 呼吸内科','3F 消化内科','2F 神经内科','1F 配药','4F 骨科','3F 手术部','2F 供应中心','1F 化验','3F EICU','2F 急诊','1F 绿色通道','4F 特诊','3F 病理','2F 影像','1F 导医'];
+const config={{ config|tojson }};
+const singleScreen={{ single_screen|default(0)|tojson }};
+let simDate=config.simulated_date||'2026-01-01';
+let scIdx=0, carTimer=null, logCnt=0, hospCache=[];
+const S = [{h:1,hi:0,p:false,t:null},{h:1,hi:0,p:false,t:null},{h:1,hi:0,p:false,t:null},{h:1,hi:0,p:false,t:null},{h:1,hi:0,p:false,t:null},{h:1,hi:0,p:false,t:null}];
+const TITLES=['各科室病床使用率','医院床位占用率','各科室空闲病床数','病床分布图','科室占用率对称双轴','香港医院资源总览'];
+const loadScreenFuncs = [load1, load2, load3, load4, load5, load6];
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+    document.getElementById('currentTime').textContent='更新时间: '+new Date().toLocaleString('zh-CN');
+    setInterval(()=>{document.getElementById('currentTime').textContent='更新时间: '+new Date().toLocaleString('zh-CN');},1000);
+    try { hospCache = await fetch('/api/hospitals').then(r=>r.json()); } catch(e) {}
+    let st = (singleScreen&&singleScreen>0) ? singleScreen-1 : 0;
+    scIdx = st; loadScreen(st);
+    if (!singleScreen||singleScreen===0) { startCarousel(); }
+    else { startScreenTimer(st); }
+});
+
+function startScreenTimer(idx) {
+    if (S[idx].t) clearInterval(S[idx].t);
+    const speeds = [420, 420, 420, 3000, 420, 3000];
+    const fn = () => {
+        const s = S[idx]; if (!s || s.p) return;
+        if (idx === 3 || idx === 5) {
+            // 屏4: 固定显示一张图，3秒后自动切下一家
+            s.p = true;
+            s.h = 12;
+            if (loadScreenFuncs[idx]) loadScreenFuncs[idx]();
+            setTimeout(()=>{
+                s.hi = (s.hi + 1) % Math.max(1, hospCache.length);
+                s.p = false;
+                fn(); // 重新触发本函数显示新医院
+            }, 3000);
+            return;
+        }
+        s.h++;
+        if (s.h > 24) {
+            s.p = true; s.h = 24;
+            if (loadScreenFuncs[idx]) loadScreenFuncs[idx]();
+            const pause = idx === 3 ? 100 : idx === 5 ? 3000 : 3000; // 屏4用短暂停
+            setTimeout(()=>{
+                s.hi = (s.hi + 1) % Math.max(1, hospCache.length);
+                s.h = 1; s.p = false;
+                const el = document.querySelector(`[data-screen="${idx+1}"]`);
+                if (el) { el.style.opacity='0.3'; el.style.transform='scale(0.98)';
+                    setTimeout(()=>{ el.style.opacity='1'; el.style.transform='scale(1)';
+                        setTimeout(()=>{ el.style.transition=''; },150); },200); }
+                if (loadScreenFuncs[idx]) loadScreenFuncs[idx]();
+            }, pause);
+            return;
+        }
+        if (loadScreenFuncs[idx]) loadScreenFuncs[idx]();
+    };
+    if (idx === 3 || idx === 5) {
+        // 屏4: 立即启动链式循环
+        fn();
+    } else {
+        S[idx].t = setInterval(fn, speeds[idx]);
+    }
+}
+
+function startCarousel(){
+    loadScreen(0); startScreenTimer(0);
+    carTimer=setInterval(()=>{
+        if (S[scIdx].t) { clearInterval(S[scIdx].t); S[scIdx].t = null; }
+        document.querySelectorAll('.screen-page').forEach(e=>e.classList.remove('active'));
+        document.querySelectorAll('.dot').forEach(e=>e.classList.remove('active'));
+        scIdx = (scIdx + 1) % 6;
+        S[scIdx].p = false;
+        document.querySelector(`[data-screen="${scIdx+1}"]`).classList.add('active');
+        document.querySelector(`[data-dot="${scIdx}"]`).classList.add('active');
+        loadScreen(scIdx); startScreenTimer(scIdx);
+        document.getElementById('carouselTag').textContent=['▶ 各科室病床使用率','▶ 医院床位占用率','▶ 各科室空闲病床数','▶ 病床分布图','▶ 科室占用率对称双轴','▶ 香港医院资源总览'][scIdx];
+    }, 13000);
+}
+
+function loadScreen(i){
+    document.getElementById('mainTitle').textContent = TITLES[i];
+    if (loadScreenFuncs[i]) loadScreenFuncs[i]();
+    if(i===5 && s6Chart) setTimeout(()=>s6Chart.resize(),100);
+}
+
+function resizeCanvas(id){
+    const c=document.getElementById(id);if(!c)return;
+    const w=c.parentElement;
+    if(!w.clientWidth||!w.clientHeight){requestAnimationFrame(()=>resizeCanvas(id));return;}
+    c.width=w.clientWidth*(window.devicePixelRatio||1);c.height=w.clientHeight*(window.devicePixelRatio||1);
+    c.style.width=w.clientWidth+'px';c.style.height=w.clientHeight+'px';return w;
+}
+
+function drawMix(id,data,opts){
+    const hh = opts.hour || 1;
+    const w=resizeCanvas(id);if(!w)return;
+    const c=document.getElementById(id),x=c.getContext('2d');
+    x.scale(window.devicePixelRatio||1,window.devicePixelRatio||1);
+    x.clearRect(0,0,c.width,c.height);
+    const W=w.clientWidth,H=w.clientHeight,pL=opts.pL||55,pR=opts.pR||40,pT=opts.pT||45,pB=opts.pB||50,cW=W-pL-pR,cH=H-pT-pB;
+    const yM=opts.yMax||100,yN=opts.yMin||0,gr=opts.groups||[],dk=['d0','d1','d2','d3'],co=opts.colors||C1;
+    const yR=yM-yN;
+    x.strokeStyle="rgba(15,45,89,.3)";x.lineWidth=1;x.fillStyle="#5c6e7f";x.font="11px sans-serif";x.textAlign="right";
+    for(let i=0;i<=5;i++){let r=i/5,y=pT+cH*(1-r);x.beginPath();x.moveTo(pL,y);x.lineTo(pL+cW,y);x.stroke();x.fillText((yN+r*yR).toFixed(opts.yF||0)+(opts.yU||'%'),pL-10,y+4);}
+    x.textAlign="center";const xS=cW/23;
+    for(let h=1;h<=24;h++){let xp=pL+(h-1)*xS;if(h===1||h===24||h%3===1){x.fillStyle=h<=hh?"#00f0ff":"#3b4b5a";x.fillText(h+"点",xp,pT+cH+20);}
+    if(h===hh){x.strokeStyle="rgba(0,240,255,.15)";x.beginPath();x.moveTo(xp,pT);x.lineTo(xp,pT+cH);x.stroke();}}
+    const gW=cW/gr.length,bW=Math.min(opts.mB||9,gW*.12);
+    gr.forEach((g,i)=>{
+        const cxp=pL+(gW*i)+gW/2,sx=cxp-(bW*4+2*3)/2;
+        dk.forEach((dkj,di)=>{
+            const v=data[g]?.[dkj]?.[hh-1]||0,bH=Math.max(1,((v-yN)/yR)*cH),bY=pT+cH-bH;
+            x.fillStyle=co[dkj];x.globalAlpha=di===0?.75:.4;x.fillRect(sx+di*(bW+2),bY,bW,bH);x.globalAlpha=1;
+            if(di===0||hh===24){x.fillStyle=di===0?"#00f0ff":"#5c6e7f";x.font="bold 9px sans-serif";x.textAlign="center";x.fillText(opts.yF===0?Math.round(v):v.toFixed(1),sx+bW/2,bY-4);}
+        });
+        x.fillStyle="#8a9ba8";x.font="12px sans-serif";x.textAlign="center";x.fillText(g,cxp,pT+cH+38);
+    });
+    const lc=[{k:'d3',c:co.d3,w:1.5,a:.5},{k:'d2',c:co.d2,w:1.5,a:.6},{k:'d1',c:co.d1,w:1.5,a:.7},{k:'d0',c:co.d0,w:2.5,a:1}];
+    const td=opts.td||data;
+    lc.forEach(l=>{
+        x.strokeStyle=l.c;x.lineWidth=l.w;x.globalAlpha=l.a;x.beginPath();
+        for(let h=1;h<=hh;h++){const v=td[l.k]?.[h-1]||0,px=pL+(h-1)*xS,py=pT+cH*(1-(v-yN)/yR);if(h===1)x.moveTo(px,py);else x.lineTo(px,py);}
+        x.stroke();
+        if(hh>0){const lv=td[l.k]?.[hh-1]||0,lx=pL+(hh-1)*xS,ly=pT+cH*(1-(lv-yN)/yR);x.fillStyle=l.c;x.beginPath();x.arc(lx,ly,l.w+1.5,0,Math.PI*2);x.fill();}
+        x.globalAlpha=1;
+    });
+}
+
+// ── 双轴混合图（左轴柱状0~50，右轴折线40~200） ──
+function drawMixDual(id,data,opts){
+    const hh = opts.hour||1;
+    const w=resizeCanvas(id);if(!w)return;
+    const c=document.getElementById(id),x=c.getContext('2d');
+    x.scale(window.devicePixelRatio||1,window.devicePixelRatio||1);
+    x.clearRect(0,0,c.width,c.height);
+    const W=w.clientWidth,H=w.clientHeight,pL=opts.pL||45,pR=opts.pR||50,pT=opts.pT||45,pB=opts.pB||50,cW=W-pL-pR,cH=H-pT-pB;
+    const bM=opts.barMax||50,lM=opts.lineMax||200,lN=opts.lineMin||40,gr=opts.groups||[],dk=['d0','d1','d2','d3'],co=opts.colors||C1;
+    const lR=lM-lN;
+    x.strokeStyle="rgba(15,45,89,.3)";x.lineWidth=1;
+    // 左侧Y轴（0~50）
+    x.fillStyle="#5c6e7f";x.font="11px sans-serif";x.textAlign="right";
+    for(let i=0;i<=5;i++){let r=i/5,y=pT+cH*(1-r);x.beginPath();x.moveTo(pL,y);x.lineTo(pL+cW,y);x.stroke();x.fillText((r*bM).toFixed(0)+'床',pL-10,y+4);}
+    // 右侧Y轴（40~200）
+    x.fillStyle="#5c6e7f";x.textAlign="left";
+    for(let i=0;i<=5;i++){let r=i/5,y=pT+cH*(1-r);x.fillText(Math.round(lN+r*lR)+'床',pL+cW+8,y+4);}
+    // X轴时间
+    x.textAlign="center";const xS=cW/23;
+    for(let h=1;h<=24;h++){let xp=pL+(h-1)*xS;if(h===1||h===24||h%3===1){x.fillStyle=h<=hh?"#00f0ff":"#3b4b5a";x.fillText(h+"点",xp,pT+cH+20);}
+    if(h===hh){x.strokeStyle="rgba(0,240,255,.15)";x.beginPath();x.moveTo(xp,pT);x.lineTo(xp,pT+cH);x.stroke();}}
+    // 柱状图（左轴）
+    const gW=cW/gr.length,bW=Math.min(opts.mB||9,gW*.12);
+    gr.forEach((g,i)=>{
+        const cxp=pL+(gW*i)+gW/2,sx=cxp-(bW*4+2*3)/2;
+        dk.forEach((dkj,di)=>{
+            const v=data[g]?.[dkj]?.[hh-1]||0,bH=Math.max(1,Math.min(cH,(v/bM)*cH)),bY=pT+cH-bH;
+            x.fillStyle=co[dkj];x.globalAlpha=di===0?.75:.4;x.fillRect(sx+di*(bW+2),bY,bW,bH);x.globalAlpha=1;
+            if(di===0||hh===24){x.fillStyle=di===0?"#00f0ff":"#5c6e7f";x.font="bold 9px sans-serif";x.textAlign="center";x.fillText(Math.round(v),sx+bW/2,bY-4);}
+        });
+        x.fillStyle="#8a9ba8";x.font="12px sans-serif";x.textAlign="center";x.fillText(g,cxp,pT+cH+38);
+    });
+    // 折线图（右轴 40~200）
+    const lc=[{k:'d3',c:co.d3,w:1.5,a:.5},{k:'d2',c:co.d2,w:1.5,a:.6},{k:'d1',c:co.d1,w:1.5,a:.7},{k:'d0',c:co.d0,w:2.5,a:1}];
+    const td=opts.td||data;
+    lc.forEach(l=>{
+        x.strokeStyle=l.c;x.lineWidth=l.w;x.globalAlpha=l.a;x.beginPath();
+        for(let h=1;h<=hh;h++){const v=td[l.k]?.[h-1]||0,px=pL+(h-1)*xS,py=pT+cH*(1-(v-lN)/lR);if(h===1)x.moveTo(px,py);else x.lineTo(px,py);}
+        x.stroke();
+        if(hh>0){const lv=td[l.k]?.[hh-1]||0,lx=pL+(hh-1)*xS,ly=pT+cH*(1-(lv-lN)/lR);x.fillStyle=l.c;x.beginPath();x.arc(lx,ly,l.w+1.5,0,Math.PI*2);x.fill();}
+        x.globalAlpha=1;
+    });
+}
+
+let s1Cache = {};
+async function load1(){
+    if (!hospCache.length) return;
+    const s = S[0];
+    const hid = hospCache[s.hi % hospCache.length]?.id;
+    const hn = hospCache[s.hi % hospCache.length]?.name || '';
+    document.getElementById('s1HospitalName').textContent = hn;
+    const badge = document.getElementById('s1HospitalBadgeName');
+    if (badge) {
+        badge.textContent = hn;
+        // 医院切换时脉冲闪烁
+        const bdg = document.getElementById('s1HospitalBadge');
+        if (bdg) { bdg.style.boxShadow='0 0 20px rgba(0,240,255,.6)'; bdg.style.transition='all 0.3s';
+            setTimeout(()=>{ bdg.style.boxShadow='0 0 5px rgba(0,240,255,.2)'; },500); }
+    }
+    document.getElementById('s1ChartTitle').textContent = hn+' 科室负载对比(柱状) 与 全院24H趋势(折线)';
+    if (!s1Cache[hid]) {
+        try {
+            const [rd, cd] = await Promise.all([
+                fetch(`/api/hourly_series?hospital=${hid}&date=${simDate}`).then(r=>r.json()),
+                fetch(`/api/daily_comparison?hospital=${hid}&date=${simDate}&days=3`).then(r=>r.json())
+            ]);
+            s1Cache[hid] = {rd, cd};
+        } catch(e) { return; }
+    }
+    const {rd, cd} = s1Cache[hid];
+    const hr = rd[hid]; if(!hr) return;
+    const dn=[...new Set(hr.hours.flatMap(h=>h.depts.map(d=>d.name)))];
+    const D={d0:[],d1:[],d2:[],d3:[]}; dn.forEach(n=>{D[n]={d0:[],d1:[],d2:[],d3:[]};});
+    for(let h=1;h<=24;h++){
+        const hh=hr.hours[h-1]; if(!hh) continue;
+        hh.depts.forEach(d=>{if(!D[d.name])return;
+            D[d.name].d0.push(d.rate); D[d.name].d1.push(d.rate*(.92+Math.random()*.06));
+            D[d.name].d2.push(d.rate*(.96+Math.random()*.08)); D[d.name].d3.push(d.rate*(.88+Math.random()*.1));
+        });
+    }
+    if(cd.length>=4){const o=cd.slice().reverse(); D.d0=Array(24).fill(o[0]?.avg_rate||0); D.d1=Array(24).fill(o[1]?.avg_rate||0); D.d2=Array(24).fill(o[2]?.avg_rate||0); D.d3=Array(24).fill(o[3]?.avg_rate||0);}
+    const hour=s.h;
+    const ar=hr.hours[hour-1]?.occupancy_rate||0;
+    document.getElementById('s1AvgRate').textContent=ar.toFixed(1)+'%';
+    drawMix('s1Canvas', D, {groups:dn, yMin:50, yMax:100, yF:0, yU:'%', colors:C1, mB:9, td:D, hour});
+}
+
+async function load2(){
+    const r=await fetch(`/api/all_hospitals_occupancy_hourly?date=${simDate}`).then(r=>r.json()),e=Object.entries(r);
+    if(!e.length)return;
+    document.getElementById('s2HospitalCount').textContent=e.length+' 所';
+    const hn=[],D={d0:[],d1:[],d2:[],d3:[]};e.forEach(([k,v])=>{hn.push(v.hospital_name);D[v.hospital_name]={d0:[],d1:[],d2:[],d3:[]};});
+    const g={d0:[],d1:[],d2:[],d3:[]};
+    for(let h=1;h<=24;h++){
+        let s0=0,s1=0,s2=0,s3=0,c=0;
+        e.forEach(([k,v])=>{const hh=v.hours[h-1];if(hh){
+            D[v.hospital_name].d0.push(hh.occupancy_rate);D[v.hospital_name].d1.push(hh.occupancy_rate*(.9+Math.random()*.08));
+            D[v.hospital_name].d2.push(hh.occupancy_rate*(.94+Math.random()*.1));D[v.hospital_name].d3.push(hh.occupancy_rate*(.86+Math.random()*.12));
+            s0+=hh.occupancy_rate;c++;
+        }});
+        g.d0.push(c?s0/c:0);g.d1.push(c?(s0/c)*.93:0);g.d2.push(c?(s0/c)*1.04:0);g.d3.push(c?(s0/c)*.88:0);
+    }
+    const ca=g.d0[S[1].h-1]||0;
+    document.getElementById('s2GlobalAvgRate').textContent=ca.toFixed(1)+'%';
+    document.getElementById('s2ChartTitle').textContent='各医院床位负荷状态 (截面:'+S[1].h+'点) 与 全域走势';
+    drawMix('s2Canvas',D,{groups:hn,yMin:50,yMax:100,yF:0,yU:'%',colors:C2,mB:15,td:g,hour:S[1].h});
+}
+
+async function load3(){
+    const hl=await fetch('/api/hospitals').then(r=>r.json()),h=hl.map(x=>x.id),hd=h[S[2].hi%h.length],hn=hl.find(x=>x.id===hd)?.name||'';
+    document.getElementById('s3HospitalName').textContent=hn;document.getElementById('s3HourLabel').textContent=S[2].h+' 点';
+    const r=await fetch(`/api/hourly_series?hospital=${hd}&date=${simDate}`).then(r=>r.json());const hr=r[hd];if(!hr)return;
+    const dn=[...new Set(hr.hours.flatMap(h=>h.depts.map(d=>d.name)))];
+    const D={d0:[],d1:[],d2:[],d3:[]};dn.forEach(n=>{D[n]={d0:[],d1:[],d2:[],d3:[]};});
+    let mF=0;
+    for(let h=1;h<=24;h++){const hh=hr.hours[h-1];if(!hh)continue;let t0=0;
+        hh.depts.forEach(d=>{if(!D[d.name])return;const free=Math.max(0,d.total-d.occupied);
+            D[d.name].d0.push(free);D[d.name].d1.push(Math.max(0,Math.round(free*(.85+Math.random()*.2))));
+            D[d.name].d2.push(Math.max(0,Math.round(free*(.9+Math.random()*.25))));D[d.name].d3.push(Math.max(0,Math.round(free*(.78+Math.random()*.3))));
+            if(free>mF)mF=free;t0+=free;
+        });D.d0.push(t0);D.d1.push(Math.round(t0*.93));D.d2.push(Math.round(t0*1.02));D.d3.push(Math.round(t0*.88));
+    }
+    const cf=D.d0[S[2].h-1]||0;document.getElementById('s3FreeBedsTotal').textContent=cf+' 张';
+    const yMF=Math.max(1,Math.ceil(mF*1.5));
+    document.getElementById('s3ChartTitle').textContent=hn+' 科室余量截面('+S[2].h+'点) 与 全院周转走向';
+    drawMixDual('s3Canvas',D,{groups:dn,barMax:50,lineMax:200,lineMin:40,yF:0,colors:C2,mB:9,td:D,pL:45,pR:50,pT:45,pB:50,hour:S[2].h});
+    // 日志
+    const lb=document.getElementById('s3LogStream'),fn=['张','王','李','赵','刘','陈','杨','周','吴','孙'];
+    const ac=[{t:'in',s:'📥 转入'},{t:'out',s:'📤 转出'}];
+    const n=2+Math.floor(Math.random()*2);
+    for(let i=0;i<n;i++){
+        const dept=dn[Math.floor(Math.random()*dn.length)],act=ac[Math.floor(Math.random()*2)],nm=fn[Math.floor(Math.random()*fn.length)]+'某某';
+        const ts=String(S[2].h).padStart(2,'0')+':'+(i===0?'12':i===1?'34':'51');
+        const el=document.createElement('div');el.className='log-item '+act.t;
+        el.innerHTML=`[${ts}] <b>${dept}</b> ${nm} ${act.s}`;lb.appendChild(el);logCnt++;
+    }
+    lb.scrollTop=lb.scrollHeight;document.getElementById('s3LogCount').textContent=logCnt+'条';
+    if(logCnt>200){lb.innerHTML='';logCnt=0;}
+    if(!singleScreen||singleScreen===3){}
+}
+
+async function load4(){
+    const hl=await fetch('/api/hospitals').then(r=>r.json()),h=hl.map(x=>x.id),hd=h[S[3].hi%h.length],hn=hl.find(x=>x.id===hd)?.name||'';
+    document.getElementById('s4HospitalName').textContent=hn;
+    const bd=await fetch(`/api/bed_map_hourly?hospital=${hd}&date=${simDate}&hour=${S[3].h}`).then(r=>r.json());
+    if(!bd||!bd.wards_data)return;
+    const ti=S[3].hi%HT.length;const rt=HT[ti];
+    document.getElementById('s4TotalBeds').textContent=(bd.total_beds||0)+' 张';
+    document.getElementById('s4OccCount').textContent=bd.occupied||0;
+    document.getElementById('s4IdleCount').textContent=bd.idle||0;
+    document.getElementById('s4MaintCount').textContent=bd.maintenance||0;
+    document.getElementById('s4MapTitle').textContent=hn+' - 端点截断线与散射建筑咬合平面图';
+    genMap(hn,rt,bd);
+    if(!singleScreen||singleScreen===4){}
+}
+
+
+
+// ═══ 屏5: 科室占用率对称双轴 ═══
+let s5Cache = null;
+async function load5(){
+    try {
+        const s = S[4];
+        const el = document.getElementById('s5HourLabel');
+        if(el) el.textContent = s.h + ' 点';
+        const r = await fetch('/api/dept_summary_hourly?date='+simDate);
+        if(!r.ok) return;
+        const data = await r.json();
+        if(!data||!data.hours) return;
+        const hours = data.hours;
+        const hour = s.h;
+        const hr = hours[hour-1];
+        if(!hr) return;
+
+        const dn = [...new Set(hours.flatMap(h=>h.depts.map(d=>d.name)))];
+        const D = {d0:[],d1:[],d2:[],d3:[]};
+        dn.forEach(n=>{D[n]={d0:[],d1:[],d2:[],d3:[]};});
+
+        let maxIdle = 0;
+        for(let h=1;h<=24;h++){
+            const hh = hours[h-1]; if(!hh) continue;
+            const free = hh.total_free||0;
+            if(free>maxIdle) maxIdle=free;
+            D.d0.push(free);
+            D.d1.push(Math.round(free*0.93));
+            D.d2.push(Math.round(free*1.02));
+            D.d3.push(Math.round(free*0.88));
+            hh.depts.forEach(d=>{
+                if(!D[d.name]) return;
+                D[d.name].d0.push(d.rate);
+                D[d.name].d1.push(d.rate*(0.92+Math.random()*0.06));
+                D[d.name].d2.push(d.rate*(0.96+Math.random()*0.08));
+                D[d.name].d3.push(d.rate*(0.88+Math.random()*0.1));
+            });
+        }
+
+        const r2 = dn.length ? dn.reduce((s,n)=>(D[n].d0[hour-1]||0)+s,0)/dn.length : 0;
+        document.getElementById('s5AvgRate').textContent = r2.toFixed(1)+'%';
+        document.getElementById('s5FreeTotal').textContent = (hr.total_free||0)+' 张';
+        document.getElementById('s5ChartTitle').textContent = '全区科室占用率(柱状) 与 空闲床趋势(折线) '+s.h+'时';
+
+        drawMixDual('s5Canvas', D, {
+            groups:dn, barMax:100, lineMax:Math.max(300,Math.ceil(maxIdle*1.2)), lineMin:0,
+            yF:0, colors:{d0:'#ff4d4d',d1:'#ffb703',d2:'#06d6a0',d3:'#118ab2'},
+            mB:8, td:D, pL:45, pR:50, pT:45, pB:50, hour
+        });
+
+        if(hour===8||hour===16||hour===24){
+            const lb=document.getElementById('s5LogStream');
+            if(lb){
+                const el2=document.createElement('div');
+                el2.style.cssText='border-left:3px solid #00f0ff;background:rgba(0,240,255,.05);color:#00f0ff;font-weight:bold;padding:5px 8px;margin-bottom:4px';
+                el2.innerHTML='⏱️ ['+hour+'时] 空闲'+hr.total_free+'床';
+                lb.appendChild(el2);
+            }
+        }
+    } catch(e) { console.error(e); }
+}
+
+// ═══ 屏6: 香港医院资源总览 ═══
+let s6Chart = null;
+let s6Data = [];
+async function load6(){
+    try {
+        if(!s6Chart){
+            const hkGeo = {"type":"FeatureCollection","features":[
+                {"type":"Feature","properties":{"name":"新界及九龙腹地"},"geometry":{"type":"Polygon","coordinates":[[[113.85,22.48],[114.0,22.55],[114.2,22.55],[114.3,22.54],[114.35,22.43],[114.28,22.35],[114.24,22.29],[114.12,22.29],[114.08,22.33],[113.98,22.36],[113.84,22.37],[113.85,22.48]]]}},
+                {"type":"Feature","properties":{"name":"香港岛"},"geometry":{"type":"Polygon","coordinates":[[[114.11,22.28],[114.16,22.29],[114.22,22.29],[114.27,22.27],[114.25,22.22],[114.19,22.21],[114.13,22.24],[114.11,22.28]]]}},
+                {"type":"Feature","properties":{"name":"大屿山"},"geometry":{"type":"Polygon","coordinates":[[[113.84,22.32],[113.96,22.33],[114.03,22.27],[114.01,22.20],[113.91,22.22],[113.83,22.25],[113.84,22.32]]]}}
+            ]};
+            const el = document.getElementById('s6EChart');
+            if(!el) return;
+            s6Chart = echarts.init(el);
+            echarts.registerMap('HK_MAP', hkGeo);
+            window.addEventListener('resize',()=>s6Chart.resize());
+        }
+
+        const r = await fetch('/api/hospital_geo?date='+simDate);
+        if(!r.ok) return;
+        s6Data = await r.json();
+        if(!s6Data||!s6Data.length) return;
+    } catch(e) { console.error('load6 err',e); return; }
+
+    const avgRate = s6Data.reduce((s,h)=>s+h.rate,0)/s6Data.length;
+    document.getElementById('s6AvgRate').textContent = avgRate.toFixed(1)+'%';
+    document.getElementById('s6MapTitle').textContent = '香港区域医院床位资源 ' + simDate;
+
+    // 左侧医院列表
+    let listHtml = '';
+    s6Data.forEach(h => {
+        const color = h.rate>=85?'#ff4d4d':h.rate>=70?'#ffb703':'#06d6a0';
+        listHtml += `<div class="hospital-status-row" style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.03)"><span>${h.name}</span><span style="color:${color};font-weight:bold">${h.rate}%</span></div>`;
+    });
+    document.getElementById('s6HospList').innerHTML = listHtml;
+
+    // 右侧ECharts散点图
+    const leftMarkers = s6Data.filter(h=>['屯门医院','广华医院','玛丽医院'].includes(h.name));
+    const rightMarkers = s6Data.filter(h=>!['屯门医院','广华医院','玛丽医院'].includes(h.name));
+
+    const series = ['left','right'].map(pos => {
+        const data = pos === 'left' ? leftMarkers : rightMarkers;
+        return {
+            name: '医院-' + pos, type: 'effectScatter', coordinateSystem: 'geo',
+            data: data.map(h => ({name:h.name,value:[h.lng,h.lat,h.rate,h.idle]})),
+            symbolSize: 12, showEffectOn: 'render',
+            rippleEffect: {brushType:'stroke',scale:4,period:2.5},
+            label: {
+                show:true, position:pos, distance:16,
+                backgroundColor:'rgba(3,15,39,.88)', borderColor:'rgba(0,240,255,.45)',
+                borderWidth:1.5, borderRadius:3, padding:[8,10],
+                formatter: p => `{title|${p.data.name}}
+{used|占${p.data.value[2]}%}  {free|空${p.data.value[3]}床}`,
+                rich: {title:{color:'#00f0ff',fontWeight:'bold',fontSize:12,lineHeight:18,align:'left'},
+                       used:{color:'#ff4d4d',fontWeight:'bold',fontSize:11,lineHeight:16},
+                       free:{color:'#06d6a0',fontWeight:'bold',fontSize:11,lineHeight:16}}
+            },
+            itemStyle: {color:'#ff4d4d',shadowBlur:8,shadowColor:'#ff4d4d'}
+        };
+    });
+
+    s6Chart.setOption({
+        tooltip: {trigger:'item',backgroundColor:'rgba(3,13,33,.95)',borderColor:'#00f0ff',borderWidth:1,
+            formatter: p => `<div style="font-size:12px;font-weight:bold;color:#00f0ff">${p.data.name}</div><div style="font-size:11px;color:#ff4d4d;margin-top:4px">占用: ${p.data.value[2]}%</div><div style="font-size:11px;color:#06d6a0">空闲: ${p.data.value[3]}床</div>`},
+        geo: {
+            map:'HK_MAP', roam:false,
+            label:{show:true,color:'#495a6b',fontSize:12,position:'inside'},
+            itemStyle:{areaColor:'rgba(11,35,77,.4)',borderColor:'#0b478f',borderWidth:2},
+            emphasis:{itemStyle:{areaColor:'rgba(15,48,102,.6)'},label:{color:'#fff'}}
+        },
+        series: series
+    }, true);
+}
+function genMap(name,type,bd){
+    const c=document.getElementById('s4Canvas');if(!c)return;
+    const w=document.getElementById('s4MapWrapper');
+    if(!w.clientWidth||!w.clientHeight){requestAnimationFrame(()=>genMap(name,type,bd));return;}
+    c.width=w.clientWidth*(window.devicePixelRatio||1);c.height=w.clientHeight*(window.devicePixelRatio||1);
+    c.style.width=w.clientWidth+'px';c.style.height=w.clientHeight+'px';
+    const x=c.getContext('2d');x.scale(window.devicePixelRatio||1,window.devicePixelRatio||1);
+    const W=w.clientWidth,H=w.clientHeight,cx=W/2,cy=H/2,sc=Math.min(W,H)/700;
+    x.clearRect(0,0,W,H);
+
+    // 格网
+    x.strokeStyle='rgba(0,240,255,.02)';x.lineWidth=1;
+    for(let i=40;i<W;i+=40){x.beginPath();x.moveTo(i,0);x.lineTo(i,H);x.stroke();}
+    for(let i=40;i<H;i+=40){x.beginPath();x.moveTo(0,i);x.lineTo(W,i);x.stroke();}
+
+    // 拓扑路网
+    const roads=[],gates=[];
+    if(type==='CROSS'){
+        roads.push({t:'L',x1:-280*sc,y1:0,x2:280*sc,y2:0});roads.push({t:'L',x1:0,y1:-180*sc,x2:0,y2:180*sc});
+        gates.push({x:-280*sc,y:0,a:Math.PI/2,n:'西'});gates.push({x:280*sc,y:0,a:Math.PI/2,n:'东'});gates.push({x:0,y:180*sc,a:0,n:'南'});
+    }else if(type==='WAVE'){
+        const p=[];for(let x=-280;x<=280;x+=10)p.push({x:x*sc,y:Math.sin(x/85)*110*sc});roads.push({t:'C',pts:p});
+        if(p.length){gates.push({x:p[0].x,y:p[0].y,a:Math.PI/3,n:'西北'});gates.push({x:p[p.length-1].x,y:p[p.length-1].y,a:-Math.PI/3,n:'东南'});}
+    }else if(type==='Y_SHAPE'){
+        roads.push({t:'L',x1:0,y1:0,x2:0,y2:190*sc});roads.push({t:'L',x1:0,y1:0,x2:-240*sc,y2:-150*sc});roads.push({t:'L',x1:0,y1:0,x2:240*sc,y2:-150*sc});
+        gates.push({x:0,y:190*sc,a:0,n:'南'});gates.push({x:-240*sc,y:-150*sc,a:Math.PI/4,n:'西北'});gates.push({x:240*sc,y:-150*sc,a:-Math.PI/4,n:'东北'});
+    }else if(type==='X_SHAPE'){
+        roads.push({t:'L',x1:-250*sc,y1:-140*sc,x2:250*sc,y2:140*sc});roads.push({t:'L',x1:-250*sc,y1:140*sc,x2:250*sc,y2:-140*sc});
+        gates.push({x:-250*sc,y:-140*sc,a:Math.PI/4,n:'西北'});gates.push({x:250*sc,y:140*sc,a:Math.PI/4,n:'东南'});gates.push({x:-250*sc,y:140*sc,a:-Math.PI/4,n:'西南'});
+    }else if(type==='Z_SHAPE'){
+        roads.push({t:'L',x1:-260*sc,y1:-130*sc,x2:170*sc,y2:-130*sc});roads.push({t:'L',x1:170*sc,y1:-130*sc,x2:-170*sc,y2:130*sc});roads.push({t:'L',x1:-170*sc,y1:130*sc,x2:260*sc,y2:130*sc});
+        gates.push({x:-260*sc,y:-130*sc,a:Math.PI/2,n:'西'});gates.push({x:260*sc,y:130*sc,a:Math.PI/2,n:'东'});
+    }else if(type==='C_SHAPE'){
+        const p=[];for(let a=Math.PI*.25;a<=Math.PI*1.75;a+=.1)p.push({x:Math.cos(a)*230*sc,y:Math.sin(a)*145*sc});roads.push({t:'C',pts:p});
+        if(p.length){gates.push({x:p[0].x,y:p[0].y,a:-Math.PI/5,n:'北'});gates.push({x:p[p.length-1].x,y:p[p.length-1].y,a:Math.PI/5,n:'南'});}
+    }else if(type==='P_SHAPE'){
+        roads.push({t:'L',x1:-280*sc,y1:30*sc,x2:-60*sc,y2:30*sc});const p=[];
+        for(let a=0;a<=Math.PI*2.05;a+=.15)p.push({x:-60*sc+Math.cos(a)*105*sc,y:30*sc+Math.sin(a)*105*sc});roads.push({t:'C',pts:p});
+        gates.push({x:-280*sc,y:30*sc,a:Math.PI/2,n:'P柄'});gates.push({x:45*sc,y:30*sc,a:Math.PI/4,n:'东回线'});
+    }else{
+        roads.push({t:'L',x1:-240*sc,y1:-120*sc,x2:240*sc,y2:-120*sc});roads.push({t:'L',x1:-240*sc,y1:120*sc,x2:240*sc,y2:120*sc});
+        gates.push({x:-240*sc,y:-120*sc,a:Math.PI/4,n:'西'});gates.push({x:240*sc,y:120*sc,a:-Math.PI/4,n:'东'});gates.push({x:-20*sc,y:175*sc,a:0,n:'南'});
+    }
+
+    // 使用真实病房数据（显示所有病房）
+    const wards=bd.wards_data||[];
+    const blds=[];
+    const roomW=W-20,roomH=H-20;
+    // 显示全部病房，凑成网格
+    const maxShow=wards.length;
+
+    for(let i=0;i<maxShow;i++){
+        const ward=wards[i];
+        const bw=(70+Math.floor(Math.random()*20))*sc,bh=(65+Math.floor(Math.random()*15))*sc;
+        let bx,by,att=0,coll;do{
+            bx=-roomW/2+55*sc+Math.random()*(roomW-110*sc-bw);
+            by=-roomH/2+55*sc+Math.random()*(roomH-110*sc-bh);coll=false;
+            for(let g of blds){if(!(bx+bw+20*sc<g.x||bx>g.x+g.w+20*sc||by+bh+20*sc<g.y||by>g.y+g.h+20*sc)){coll=true;break;}}
+        }while(coll&&++att<150);
+
+        // 收集该病房所有床位的真实状态
+        const beds=[];let total=0,used=0,idl=0,mnt=0;
+        if(ward.buildings){
+            for(const bl of Object.keys(ward.buildings)){
+                for(const fl of Object.keys(ward.buildings[bl])){
+                    for(const bed of ward.buildings[bl][fl]){
+                        beds.push({...bed,display:true});
+                        total++;
+                        if(bed.status==='occupied')used++;
+                        else if(bed.status==='idle')idl++;
+                        else if(bed.status==='maintenance')mnt++;
+                    }
+                }
+            }
+        }
+        const isEmerg=ward.dept_name==='急诊科'||ward.dept_name==='ICU';
+        blds.push({x:bx,y:by,w:bw,h:bh,name:ward.ward_name,dept:ward.dept_name,total,used,idl,mnt,beds,isEmerg});
+        // 连接道路
+        let cl={x:0,y:0},md=Infinity;
+        roads.forEach(r=>{
+            if(r.t==='L'){for(let t=0;t<=1;t+=.04){const lx=r.x1+(r.x2-r.x1)*t,ly=r.y1+(r.y2-r.y1)*t,d=Math.hypot(lx-bx-bw/2,ly-by-bh/2);if(d<md){md=d;cl={x:lx,y:ly};}}}
+            else if(r.pts){r.pts.forEach(p=>{const d=Math.hypot(p.x-bx-bw/2,p.y-by-bh/2);if(d<md){md=d;cl=p;}});}
+        });
+        blds[i].conn={sx:cl.x,sy:cl.y,ex:bx+bw/2,ey:by+bh/2};
+    }
+
+    // 连接支路
+    x.lineCap='round';x.lineJoin='round';
+    blds.forEach(b=>{if(!b.conn)return;
+        x.strokeStyle='rgba(33,48,39,.9)';x.lineWidth=12*sc;
+        x.beginPath();x.moveTo(cx+b.conn.sx,cy+b.conn.sy);x.lineTo(cx+b.conn.ex,cy+b.conn.ey);x.stroke();});
+
+    // 主干道
+    x.strokeStyle='rgba(42,58,49,1)';x.lineWidth=24*sc;
+    roads.forEach(r=>{
+        x.beginPath();
+        if(r.t==='L'){x.moveTo(cx+r.x1,cy+r.y1);x.lineTo(cx+r.x2,cy+r.y2);}
+        else if(r.t==='C'&&r.pts){r.pts.forEach((p,i)=>{if(i===0)x.moveTo(cx+p.x,cy+p.y);else x.lineTo(cx+p.x,cy+p.y);});}
+        x.stroke();
+        x.strokeStyle='rgba(255,183,3,.15)';x.lineWidth=1.5;x.setLineDash([6,10]);x.stroke();x.setLineDash([]);
+        x.strokeStyle='rgba(42,58,49,1)';x.lineWidth=24*sc;
+    });
+
+    // 大门截断线
+    gates.forEach(g=>{x.save();x.translate(cx+g.x,cy+g.y);x.rotate(g.a);
+        x.strokeStyle='#e056fd';x.lineWidth=4;x.shadowColor='#e056fd';x.shadowBlur=8;
+        x.beginPath();x.moveTo(0,-20*sc);x.lineTo(0,20*sc);x.stroke();x.shadowBlur=0;
+        x.fillStyle='#fff';x.font='bold '+(9*sc)+'px sans-serif';x.textAlign='center';x.fillText(g.n,14*sc,4);x.restore();});
+
+    // 绘制建筑（使用真实床位状态）
+    blds.forEach(b=>{
+        const bx=cx+b.x,by=cy+b.y;
+        x.fillStyle=b.isEmerg?'rgba(115,28,28,.55)':'rgba(15,48,102,.6)';
+        x.strokeStyle=b.isEmerg?'rgba(255,60,60,.55)':'rgba(0,240,255,.35)';x.lineWidth=1.5;
+        x.fillRect(bx,by,b.w,b.h);x.strokeRect(bx,by,b.w,b.h);
+
+        // 病房名+楼层
+        x.fillStyle=b.isEmerg?'#ff4d4d':'#00f0ff';
+        x.font='bold '+(11*sc)+'px sans-serif';x.textAlign='center';
+        x.fillText(b.name,bx+b.w/2,by+15*sc);
+
+        // 占用:红 + 空闲:绿
+        x.font=(9*sc)+'px sans-serif';
+        x.fillStyle='#ff5e5e';
+        x.fillText('占'+b.used,bx+b.w/2-22*sc,by+32*sc);
+        x.fillStyle='#1dd1a1';
+        x.fillText('空'+b.idl,bx+b.w/2+18*sc,by+32*sc);
+
+        // 各楼层占用/空闲小字显示
+        if(b.beds.length){
+            const floors={};
+            b.beds.forEach(bed=>{
+                const key=bed.building+'-'+bed.floor;
+                if(!floors[key])floors[key]={occ:0,idl:0};
+                if(bed.status==='occupied')floors[key].occ++;
+                else if(bed.status==='idle')floors[key].idl++;
+            });
+            x.textAlign='left';x.font=(7*sc)+'px sans-serif';
+            let fi=0;
+            Object.keys(floors).sort().forEach(k=>{
+                const f=floors[k];const fy=by+44*sc+fi*11*sc;
+                if(fy<by+b.h-3*sc){
+                    x.fillStyle='#a5b5c4';
+                    x.fillText(k+'F 占'+f.occ+' 空'+f.idl,bx+6*sc,fy);
+                    fi++;
+                }
+            });
+        }
+    });
+
+    // 左侧楼层列表
+    const fc=document.getElementById('s4FloorContainer');fc.innerHTML='';
+    blds.forEach(b=>{
+        const g=document.createElement('div');
+        g.innerHTML=`<div class="floor-group-title">🏥 ${b.name}</div>`;
+        const groups={};
+        if(b.beds){
+            b.beds.forEach(bed=>{
+                const key=bed.building+'-'+bed.floor;
+                if(!groups[key])groups[key]={occ:0,idl:0};
+                if(bed.status==='occupied')groups[key].occ++;
+                else if(bed.status==='idle')groups[key].idl++;
+            });
+        }
+        Object.keys(groups).sort().forEach(k=>{
+            const gr=groups[k];const it=document.createElement('div');it.className='floor-item';
+            it.innerHTML=`<span>${k}F</span>
+                <span><span style="color:#ff5e5e">占${gr.occ}</span> <span style="color:#1dd1a1">空${gr.idl}</span></span>`;
+            g.appendChild(it);
+        });
+        fc.appendChild(g);
+    });
+}
+</script>
+</body>
+</html>

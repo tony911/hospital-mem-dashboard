@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>科室空闲病床调度与临床周转大屏</title>
+    <style>
+        /* 基础样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #020612;
+            color: #ffffff;
+            font-family: "Helvetica Neue", Helvetica, "PingFang SC", Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* 大屏幕三栏式布局 */
+        .dashboard-container {
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(circle at 50% 50%, #061530 0%, #020612 100%);
+        }
+
+        /* 头部标题 */
+        .header {
+            height: 50px;
+            width: 100%;
+            position: relative;
+            text-align: center;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #00f0ff;
+            letter-spacing: 3px;
+            line-height: 40px;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        }
+        .header .sub-info {
+            position: absolute;
+            right: 10px;
+            bottom: 12px;
+            font-size: 13px;
+            color: #52667a;
+        }
+        .header .carousel-tag {
+            position: absolute;
+            left: 10px;
+            bottom: 12px;
+            background: rgba(0, 240, 255, 0.1);
+            padding: 3px 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 240, 255, 0.4);
+            font-size: 13px;
+            color: #00f0ff;
+        }
+
+        /* 核心内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            gap: 20px;
+            min-height: 0;
+        }
+
+        /* 左侧：统计卡片 */
+        .sidebar-left {
+            width: 260px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .card {
+            background: rgba(6, 20, 46, 0.6);
+            border: 1px solid #0b2752;
+            border-radius: 4px;
+            padding: 15px;
+            position: relative;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 8px; height: 8px;
+            border-top: 2px solid #00f0ff; border-left: 2px solid #00f0ff;
+        }
+        .card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; right: 0; width: 8px; height: 8px;
+            border-bottom: 2px solid #00f0ff; border-right: 2px solid #00f0ff;
+        }
+        .card-title {
+            font-size: 13px;
+            color: #617385;
+            margin-bottom: 4px;
+        }
+        .card-value {
+            font-size: 30px;
+            font-weight: bold;
+            font-family: 'Impact', sans-serif;
+            margin-top: 2px;
+        }
+
+        /* 中间：主混合数据图表 */
+        .chart-center-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .legends {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-box {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+        .canvas-container {
+            flex: 1;
+            background: rgba(3, 10, 24, 0.85);
+            border: 1px solid #0c2b5c;
+            border-radius: 4px;
+            position: relative;
+        }
+        canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
+
+        /* 右侧：实时患者出入院周转记录流 */
+        .sidebar-right-log {
+            width: 320px;
+            background: rgba(4, 14, 33, 0.85);
+            border: 1px solid #0c2b5c;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            position: relative;
+        }
+        .log-title {
+            font-size: 14px;
+            color: #00f0ff;
+            font-weight: bold;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .log-stream-box {
+            flex: 1;
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+        }
+        .log-item {
+            padding: 6px 8px;
+            background: rgba(255,255,255,0.02);
+            border-left: 3px solid #617385;
+            border-radius: 2px;
+            animation: fadeInLog 0.3s ease-out;
+            line-height: 1.4;
+        }
+        .log-item.in { border-left-color: #ff4d4d; background: rgba(255, 77, 77, 0.04); }
+        .log-item.out { border-left-color: #06d6a0; background: rgba(6, 214, 160, 0.04); }
+        
+        @keyframes fadeInLog {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <div class="header">
+        <div class="carousel-tag" id="carouselTag">医院动态轮播中...</div>
+        <h1>辖区医疗机构科室空闲病床数动态比对大屏 (时空周转联动版)</h1>
+        <div class="sub-info" id="currentSystemTime">时间轴推进中...</div>
+    </div>
+
+    <div class="main-content">
+        <div class="sidebar-left">
+            <div class="card">
+                <div class="card-title">当前监察机构 (轮播)</div>
+                <div style="font-size: 16px; color: #ff9f43; font-weight: bold; margin-top: 5px;" id="hospitalName">正在加载...</div>
+            </div>
+            <div class="card">
+                <div class="card-title">时间轴当前截面</div>
+                <div class="card-value" id="hourLabel" style="color: #00f0ff;">1 点</div>
+            </div>
+            <div class="card">
+                <div class="card-title">全院可用空闲床位总量</div>
+                <div class="card-value" id="freeBedsTotal" style="color: #06d6a0;">0 张</div>
+            </div>
+            <div class="card" style="flex: 1;">
+                <div class="card-title" style="color: #00f0ff; font-weight: bold;">时空联动逻辑</div>
+                <p style="font-size: 12px; color: #617385; line-height: 1.8; margin-top: 8px;">
+                    • <b>0.5秒动态推进</b>：时间轴由 1点 顺延至 24点，图表采用完全动态加载效果。<br>
+                    • <b>全量并列对比</b>：柱状图每次同步刷新该时刻<b>当天与前3天</b>的历史落差。<br>
+                    • <b>右侧调度流水</b>：每走过一个小时，右侧将<b>同步弹现</b>该时段内各科室患者的入住（空床减少）与出院（空床增加）实时流转记录。
+                </p>
+            </div>
+        </div>
+
+        <div class="chart-center-area">
+            <div class="chart-header">
+                <h3 style="color: #00f0ff; font-size: 15px;" id="chartTitle">科室空闲病床对比(柱状) 与 全院24H总趋势走向(折线)</h3>
+                <div class="legends">
+                    <div class="legend-item"><div class="legend-box" style="background: #ff4d4d;"></div><span style="color:#ffffff; font-weight: bold;">当天数据</span></div>
+                    <div class="legend-item"><div class="legend-box" style="background: #ffb703;"></div><span style="color:#a5b5c4">前1天</span></div>
+                    <div class="legend-item"><div class="legend-box" style="background: #06d6a0;"></div><span style="color:#a5b5c4">前2天</span></div>
+                    <div class="legend-item"><div class="legend-box" style="background: #118ab2;"></div><span style="color:#a5b5c4">前3天</span></div>
+                </div>
+            </div>
+            <div class="canvas-container" id="canvasWrapper">
+                <canvas id="mixedChart"></canvas>
+            </div>
+        </div>
+
+        <div class="sidebar-right-log">
+            <div class="log-title">
+                <span>临床调度流水记录流</span>
+                <span style="color: #617385; font-size: 11px;" id="logCountLabel">已同步: 0条</span>
+            </div>
+            <div class="log-stream-box" id="logStreamBox">
+                </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 8家医院资产字典配置 ---
+    const hospitals = [
+        { name: "市第一人民医院 (总院)", maxFreeLimit: 80, baseModifier: 1.0 },
+        { name: "市中医医院 (东院区)", maxFreeLimit: 60, baseModifier: 0.8 },
+        { name: "市第二人民医院", maxFreeLimit: 70, baseModifier: 0.9 },
+        { name: "市妇幼保健院", maxFreeLimit: 50, baseModifier: 0.7 },
+        { name: "市第三人民医院", maxFreeLimit: 65, baseModifier: 0.85 },
+        { name: "市第四人民医院", maxFreeLimit: 55, baseModifier: 0.75 },
+        { name: "市胸科医院", maxFreeLimit: 60, baseModifier: 0.8 },
+        { name: "儿童医学中心", maxFreeLimit: 75, baseModifier: 0.95 }
+    ];
+
+    const departments = ["ICU", "呼吸内科", "普外科", "心血管科", "骨科", "儿科", "急诊观察"];
+    
+    // 患者姓氏与名字库（用于动态生成出入院日志短语）
+    const firstNames = ["张", "王", "李", "赵", "刘", "陈", "杨", "周", "吴", "孙"];
+    const actionTypes = [
+        { type: "in", text: "接收入院/转科患者1名", bedChange: -1 },
+        { type: "out", text: "办理治愈出院/转出1名", bedChange: 1 }
+    ];
+
+    const colors = {
+        day0: '#ff4d4d', // 当天 (红)
+        day1: '#ffb703', // 前1天 (黄)
+        day2: '#06d6a0', // 前2天 (绿)
+        day3: '#118ab2'  // 前3天 (蓝)
+    };
+
+    let currentHospitalIndex = 0;
+    let currentHour = 1; 
+    let animationTimer = null;
+    let accumulatedLogsCount = 0;
+
+    const canvas = document.getElementById('mixedChart');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('canvasWrapper');
+    const logBox = document.getElementById('logStreamBox');
+
+    function resizeCanvas() {
+        canvas.width = wrapper.clientWidth;
+        canvas.height = wrapper.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // 生成单家医院全矩阵空床24小时的对比伪数据
+    function generateFreeBedsDataset(hosp) {
+        let dataset = {
+            day0: [], day1: [], day2: [], day3: [], 
+            deptHistory: {} 
+        };
+
+        const limit = hosp.maxFreeLimit;
+
+        // 1. 生成全院趋势宏观折线走向
+        for(let h = 1; h <= 24; h++) {
+            let wave = Math.sin((h + 2) / 3.8) * 0.15 + 0.35; // 空闲率起伏
+            dataset.day0.push(Math.round(limit * 4 * (wave + Math.random()*0.03)));
+            dataset.day1.push(Math.round(limit * 4 * (wave * 0.93 + Math.random()*0.03)));
+            dataset.day2.push(Math.round(limit * 4 * (wave * 1.06 + Math.random()*0.03)));
+            dataset.day3.push(Math.round(limit * 4 * (wave * 0.87 + Math.random()*0.03)));
+        }
+
+        // 2. 生成各个科室4天在24小时各截面的具体空床数
+        departments.forEach((dept, idx) => {
+            dataset.deptHistory[dept] = { day0: [], day1: [], day2: [], day3: [] };
+            let baseFree = 20 + (idx * 5) * hosp.baseModifier;
+
+            for(let h = 1; h <= 24; h++) {
+                let hourlyWave = Math.sin(h / 3) * 6;
+                dataset.deptHistory[dept].day0.push(Math.max(2, Math.round(baseFree + hourlyWave + (Math.random()*4 - 2))));
+                dataset.deptHistory[dept].deptName = dept; // 附带名字
+                dataset.deptHistory[dept].day1.push(Math.max(1, Math.round(baseFree * 0.91 + hourlyWave + (Math.random()*4 - 2))));
+                dataset.deptHistory[dept].day2.push(Math.max(3, Math.round(baseFree * 1.04 + hourlyWave + (Math.random()*4 - 2))));
+                dataset.deptHistory[dept].day3.push(Math.max(0, Math.round(baseFree * 0.85 + hourlyWave + (Math.random()*4 - 2))));
+            }
+        });
+
+        return dataset;
+    }
+
+    let activeDataMatrix = generateFreeBedsDataset(hospitals[currentHospitalIndex]);
+
+    // --- 同步追加右侧出入院流水日志的发生器 ---
+    function appendDynamicTurnoverLog(hour) {
+        // 每个小时随机发生 2 至 3 条患者事件变更
+        let eventsCount = 2 + Math.floor(Math.random() * 2);
+        
+        for(let i=0; i<eventsCount; i++) {
+            let randDept = departments[Math.floor(Math.random() * departments.length)];
+            let randAction = actionTypes[Math.floor(Math.random() * actionTypes.length)];
+            let pName = firstNames[Math.floor(Math.random() * firstNames.length)] + "某某";
+            
+            // 格式化时间前缀格式
+            let timeStr = (hour < 10 ? "0" + hour : hour) + ":" + (i === 0 ? "12" : (i === 1 ? "34" : "51"));
+
+            let logDiv = document.createElement('div');
+            logDiv.className = `log-item ${randAction.type}`;
+            
+            // 组装文本内容
+            let logText = `[${timeStr}] <b>${randDept}</b> ${pName} ${randAction.text}，该科空床数 <b>${randAction.bedChange > 0 ? '+' : ''}${randAction.bedChange}</b>`;
+            logDiv.innerHTML = logText;
+
+            // 塞入容器头部或尾部并自动向下翻滚滚动条
+            logBox.appendChild(logDiv);
+            accumulatedLogsCount++;
+        }
+        
+        // 自动保持将滚动条锁定在最底部最新日志处
+        logBox.scrollTop = logBox.scrollHeight;
+        document.getElementById('logCountLabel').innerText = `已同步: ${accumulatedLogsCount}条`;
+    }
+
+    // --- Canvas核心绘图引擎 ---
+    function renderChart() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const paddingLeft = 55;
+        const paddingRight = 45; 
+        const paddingTop = 45;
+        const paddingBottom = 50;
+        
+        const chartWidth = canvas.width - paddingLeft - paddingRight;
+        const chartHeight = canvas.height - paddingTop - paddingBottom;
+
+        // 获取当前医院纵轴病床数量峰值上线上限刻度
+        const currentYMaxLimit = hospitals[currentHospitalIndex].maxFreeLimit;
+
+        // 1. 绘制 Y 轴背景格网刻度
+        ctx.strokeStyle = "rgba(15, 45, 89, 0.3)";
+        ctx.lineWidth = 1;
+        ctx.fillStyle = "#5c6e7f";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "right";
+
+        for (let i = 0; i <= 5; i++) {
+            let ratio = i / 5;
+            let y = paddingTop + chartHeight * (1 - ratio);
+            ctx.beginPath(); ctx.moveTo(paddingLeft, y); ctx.lineTo(paddingLeft + chartWidth, y); ctx.stroke();
+            ctx.fillText(Math.round(ratio * currentYMaxLimit) + "张", paddingLeft - 10, y + 4);
+        }
+
+        // 2. 绘制 X 轴 24小时刻度线
+        ctx.textAlign = "center";
+        const xStep = chartWidth / 23; 
+        for (let h = 1; h <= 24; h++) {
+            let x = paddingLeft + (h - 1) * xStep;
+            if (h === 1 || h === 24 || h % 3 === 1) {
+                ctx.fillStyle = h <= currentHour ? "#00f0ff" : "#3b4b5a";
+                ctx.fillText(h + "点", x, paddingTop + chartHeight + 20);
+            }
+            if (h === currentHour) { 
+                ctx.strokeStyle = "rgba(0, 240, 255, 0.25)";
+                ctx.beginPath(); ctx.moveTo(x, paddingTop); ctx.lineTo(x, paddingTop + chartHeight); ctx.stroke();
+            }
+        }
+
+        // 3. 【完全动态加载】绘制：各科室在当前小时点下 4 天并列的空闲床位柱状图
+        const groupCount = departments.length;
+        const groupWidth = chartWidth / groupCount;
+        const barWidth = Math.min(9, groupWidth * 0.15);
+        const daysKeys = ['day0', 'day1', 'day2', 'day3'];
+
+        departments.forEach((dept, i) => {
+            let groupCenterX = paddingLeft + (groupWidth * i) + (groupWidth / 2);
+            let startX = groupCenterX - (barWidth * 4 + 3 * 2.5) / 2;
+
+            daysKeys.forEach((dayKey, dayIdx) => {
+                let barX = startX + dayIdx * (barWidth + 2.5);
+                // 抓取数据
+                let freeVal = activeDataMatrix.deptHistory[dept][dayKey][currentHour - 1];
+                let barRatio = Math.min(1, freeVal / currentYMaxLimit);
+                let targetBarHeight = barRatio * chartHeight;
+                let barY = paddingTop + chartHeight - targetBarHeight;
+
+                ctx.fillStyle = colors[dayKey];
+                ctx.globalAlpha = dayKey === 'day0' ? 0.9 : 0.5; // 当天高亮，历史弱化
+                ctx.fillRect(barX, barY, barWidth, targetBarHeight);
+                ctx.globalAlpha = 1.0;
+
+                // 在柱子头顶标注当前的张数
+                ctx.fillStyle = dayKey === 'day0' ? "#ffffff" : "#5c6e7f";
+                ctx.font = "bold 9px sans-serif";
+                if(dayKey === 'day0' || currentHour === 24) {
+                    ctx.fillText(freeVal, barX + barWidth/2, barY - 4);
+                }
+            });
+
+            // 科室底部文字
+            ctx.fillStyle = "#8a9ba8";
+            ctx.font = "12px sans-serif";
+            ctx.fillText(dept, groupCenterX, paddingTop + chartHeight + 38);
+        });
+
+        // 4. 【动态拉伸延长】绘制全院总剩余宏观走向趋势折线图
+        const lineConfigs = [
+            { key: 'day3', color: colors.day3, width: 1.5, alpha: 0.5 },
+            { key: 'day2', color: colors.day2, width: 1.5, alpha: 0.6 },
+            { key: 'day1', color: colors.day1, width: 1.5, alpha: 0.7 },
+            { key: 'day0', color: colors.day0, width: 2.8, alpha: 1.0 }  // 当天粗线强调
+        ];
+
+        lineConfigs.forEach(line => {
+            ctx.strokeStyle = line.color;
+            ctx.lineWidth = line.width;
+            ctx.globalAlpha = line.alpha;
+            ctx.beginPath();
+
+            for (let h = 1; h <= currentHour; h++) {
+                let val = activeDataMatrix[line.key][h - 1];
+                // 总量折线缩放对齐（由于总量是4个科室的总和左右，除以 3.6 做比例适应）
+                let lineRatio = val / (currentYMaxLimit * 3.6);
+                let x = paddingLeft + (h - 1) * xStep;
+                let y = paddingTop + chartHeight * (1 - lineRatio);
+
+                if (h === 1) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // 绘制最右端焦点
+            if (currentHour > 0) {
+                let lastVal = activeDataMatrix[line.key][currentHour - 1];
+                let lineRatio = lastVal / (currentYMaxLimit * 3.6);
+                let lastX = paddingLeft + (currentHour - 1) * xStep;
+                let lastY = paddingTop + chartHeight * (1 - lineRatio);
+                
+                ctx.fillStyle = line.color;
+                ctx.beginPath(); ctx.arc(lastX, lastY, line.width + 1.5, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+        });
+    }
+
+    // --- 大屏业务总控调度驱动 (0.5秒/时步长) ---
+    function updateDashboard() {
+        const hosp = hospitals[currentHospitalIndex];
+        
+        // 刷新DOM文本状态
+        document.getElementById('hospitalName').innerText = hosp.name;
+        document.getElementById('hourLabel').innerText = currentHour + " 点";
+        
+        // 全院当点总空床求和
+        let totalFree = activeDataMatrix.day0[currentHour - 1];
+        document.getElementById('freeBedsTotal').innerText = totalFree + " 张";
+
+        let now = new Date();
+        document.getElementById('currentSystemTime').innerText = "时间轴自动推进中 | 刷新时间: " + now.toLocaleTimeString();
+        document.getElementById('chartTitle').innerText = hosp.name + " - 科室余量截面(当前:" + currentHour + "点) 与 全院周转走向";
+
+        // 1. 触发同步追加右侧记录流
+        appendDynamicTurnoverLog(currentHour);
+
+        // 2. 触发Canvas重绘
+        renderChart();
+
+        // 3. 时间轴推进控制
+        if (currentHour < 24) {
+            currentHour++;
+        } else {
+            // 24点播放顺延完毕，自动清空日志并无缝轮播更替到下一家医院
+            currentHour = 1;
+            accumulatedLogsCount = 0;
+            logBox.innerHTML = ""; // 清空上一家医院的流水日志
+            
+            currentHospitalIndex = (currentHospitalIndex + 1) % hospitals.length;
+            activeDataMatrix = generateFreeBedsDataset(hospitals[currentHospitalIndex]);
+
+            const tag = document.getElementById('carouselTag');
+            tag.innerText = "清空缓存，无缝切入新机构...";
+            tag.style.color = "#ff9f43";
+            setTimeout(() => {
+                tag.innerText = "医院动态轮播中...";
+                tag.style.color = "#00f0ff";
+            }, 1000);
+        }
+    }
+
+    // 初始化启动运行 (定格 500ms 高速推进周期)
+    updateDashboard();
+    animationTimer = setInterval(updateDashboard, 500);
+</script>
+
+</body>
+</html>

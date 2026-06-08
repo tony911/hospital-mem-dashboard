@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>医疗机构空间路网咬合鸟瞰总平面大屏</title>
+    <style>
+        /* 基础样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #020612;
+            color: #ffffff;
+            font-family: "Helvetica Neue", Helvetica, "PingFang SC", Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* 大屏幕布局 */
+        .dashboard-container {
+            width: 100%;
+            height: 100%;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(circle at 50% 50%, #061530 0%, #020612 100%);
+        }
+
+        /* 头部大标题 */
+        .header {
+            height: 50px;
+            width: 100%;
+            position: relative;
+            text-align: center;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #00f0ff;
+            letter-spacing: 3px;
+            line-height: 40px;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        }
+        .header .sub-info {
+            position: absolute;
+            right: 10px;
+            bottom: 12px;
+            font-size: 13px;
+            color: #52667a;
+        }
+        .header .carousel-tag {
+            position: absolute;
+            left: 10px;
+            bottom: 12px;
+            background: rgba(0, 240, 255, 0.1);
+            padding: 3px 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 240, 255, 0.4);
+            font-size: 13px;
+            color: #00f0ff;
+        }
+
+        /* 核心内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            gap: 24px;
+            min-height: 0;
+        }
+
+        /* 左侧随动机能看板 */
+        .sidebar {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .card {
+            background: rgba(6, 20, 46, 0.6);
+            border: 1px solid #0b2752;
+            border-radius: 4px;
+            padding: 16px;
+            position: relative;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 8px; height: 8px;
+            border-top: 2px solid #00f0ff; border-left: 2px solid #00f0ff;
+        }
+        .card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; right: 0; width: 8px; height: 8px;
+            border-bottom: 2px solid #00f0ff; border-right: 2px solid #00f0ff;
+        }
+        .card-title {
+            font-size: 13px;
+            color: #617385;
+            margin-bottom: 6px;
+        }
+        .card-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #ff9f43;
+            margin-top: 4px;
+        }
+        .floor-container {
+            max-height: 380px;
+            overflow-y: auto;
+        }
+        .floor-group-title {
+            font-size: 13px;
+            color: #00f0ff;
+            margin-top: 12px;
+            margin-bottom: 4px;
+            font-weight: bold;
+            border-left: 2px solid #00f0ff;
+            padding-left: 6px;
+        }
+        .floor-item {
+            font-size: 12px;
+            color: #a5b5c4;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* 右侧2D平面模拟地图区 */
+        .chart-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .legends {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .legend-box {
+            width: 14px;
+            height: 14px;
+            border-radius: 2px;
+        }
+
+        /* 2D地图定位画板 */
+        .map-canvas-container {
+            flex: 1;
+            background: #030d22;
+            border: 1px solid #0c2b5c;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 30px rgba(0, 240, 255, 0.08);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <div class="header">
+        <div class="carousel-tag" id="carouselTag">空间生态自由进化中...</div>
+        <h1>辖区医疗机构大门(路网端点线)与大楼(全域散落分叉)空间大屏</h1>
+        <div class="sub-info" id="refreshTimer">更替倒计时: 3.0s</div>
+    </div>
+
+    <div class="main-content">
+        <div class="sidebar">
+            <div class="card">
+                <div class="card-title">当前锁定透视院区</div>
+                <div class="card-value" id="hospitalName" style="color: #ff9f43; font-size: 16px;">正在破译地形...</div>
+            </div>
+            <div class="card">
+                <div class="card-title">当前路网拓扑形态</div>
+                <div class="card-value" id="roadTypeLabel" style="color: #00f0ff; font-size: 15px;">计算中...</div>
+            </div>
+            <div class="card">
+                <div class="card-title">全院床位总资产</div>
+                <div class="card-value" id="hospitalTotalBeds" style="font-size: 26px; font-family: 'Impact'; color:#00f0ff;">0 张</div>
+            </div>
+            
+            <div class="card" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                <div class="card-title" style="color: #00f0ff; font-weight: bold; margin-bottom: 5px;">各大楼异构功能层级分布树</div>
+                <div class="floor-container" id="floorContainer">
+                    </div>
+            </div>
+        </div>
+
+        <div class="chart-area">
+            <div class="chart-header">
+                <h3 style="color: #00f0ff; font-size: 14px;" id="chartTitle">大门端点截断线与无序全域散射建筑空间图</h3>
+                <div class="legends">
+                    <div class="legend-item"><div class="legend-box" style="background: rgba(17, 54, 114, 0.75); border: 1px solid #00f0ff;"></div><span style="color:#ffffff;">综合大楼</span></div>
+                    <div class="legend-item"><div class="legend-box" style="background: rgba(130, 30, 30, 0.6); border: 1px solid #ff4d4d;"></div><span style="color:#ffffff;">急诊中心</span></div>
+                    <div class="legend-item"><div class="legend-box" style="background: #25332c;"></div><span style="color:#ffffff;">主干道路</span></div>
+                    <div class="legend-item"><div class="legend-box" style="background: #e056fd; height:4px; width:16px;"></div><span style="color:#ffffff;">大门截断线</span></div>
+                </div>
+            </div>
+            <div class="map-canvas-container" id="mapWrapper">
+                <canvas id="mapChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const hospitalsInfo = [
+        { name: "市第一人民医院 (总院)", type: "CROSS", desc: "经典【十字型】轴线对称干道" },
+        { name: "市中医医院 (东院区)", type: "WAVE", desc: "柔性【波浪型】自由流水曲线干道" },
+        { name: "市第二人民医院", type: "Y_SHAPE", desc: "辐射分流【Y型】三叉戟干道" },
+        { name: "市妇幼保健院", type: "X_SHAPE", desc: "对角交叉【X型】中心枢纽拓扑干道" },
+        { name: "市第三人民医院", type: "Z_SHAPE", desc: "空间折线【Z型】错落闪电干道" },
+        { name: "市第四人民医院", type: "C_SHAPE", desc: "景观合抱【C型】环抱式半椭圆干道" },
+        { name: "市胸科医院", type: "P_SHAPE", desc: "单向回环【P型】闭合环岛调度干道" },
+        { name: "儿童医学中心", type: "NONE_STAR", desc: "去中心化【无主干道】纯星状分叉网络" }
+    ];
+
+    const buildingPrefixPool = ["综合", "急救", "第一", "第二", "临床", "华康", "博爱", "健民", "仁济"];
+    const buildingSuffixPool = ["住院楼", "内科大楼", "外科中心", "急救主楼", "重症医学大楼", "诊疗大厅"];
+
+    const rawFloorFunctions = [
+        "5F 特需VIP病区", "4F 住院常规层", "3F 住院常规层", "2F ICU重症监护中心", "1F 一站式大厅",
+        "4F 呼吸内科", "3F 消化内科", "2F 神经内科专诊", "1F 自动配药大厅",
+        "4F 骨科病房", "3F 无菌手术部", "2F 供应保障中心", "1F 急性化验抽血",
+        "3F EICU留观", "2F 急诊流水线", "1F 绿色通带抢救室",
+        "4F 高级特诊室", "3F 病理检测中心", "2F 放射科影像核磁", "1F 导医便民中心"
+    ];
+
+    let currentHospitalIndex = 0;
+    let switchInterval = 3000; 
+    let countdownValue = 3.0;
+    let globalTimer = null;
+    let countdownTimer = null;
+    let activeMapEntity = null;
+
+    const canvas = document.getElementById('mapChart');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('mapWrapper');
+
+    function enforceCanvasSize() {
+        if (canvas.width !== wrapper.clientWidth || canvas.height !== wrapper.clientHeight) {
+            canvas.width = wrapper.clientWidth;
+            canvas.height = wrapper.clientHeight;
+            return true;
+        }
+        return false;
+    }
+
+    // --- 完全无序全场散射排斥算法 + 路尽头端点线大门咬合引擎 ---
+    function generateTrueRandomTopology(hosp) {
+        enforceCanvasSize();
+        const cw = canvas.width;
+        const ch = canvas.height;
+
+        let entity = {
+            hospitalName: hosp.name,
+            roadType: hosp.type,
+            roadDesc: hosp.desc,
+            buildings: [],
+            mainRoadSegments: [], 
+            connectiveRoads: [],  
+            gates: []             
+        };
+
+        let type = hosp.type;
+
+        // 【规则1：先生路，大门强制以“垂直截断线”精准定格在路的绝对终点尽头】
+        if (type === "CROSS") {
+            entity.mainRoadSegments.push({ type: "LINE", x1: -280, y1: 0, x2: 280, y2: 0 });
+            entity.mainRoadSegments.push({ type: "LINE", x1: 0, y1: -180, x2: 0, y2: 180 });
+            
+            // 尽头连线大门
+            entity.gates.push({ x: -280, y: 0, len: 44, angle: Math.PI/2, name: "西出口" });
+            entity.gates.push({ x: 280, y: 0, len: 44, angle: Math.PI/2, name: "东出口" });
+            entity.gates.push({ x: 0, y: 180, len: 44, angle: 0, name: "南入口" });
+        }
+        else if (type === "WAVE") {
+            let pts = [];
+            for (let x = -280; x <= 280; x += 10) { pts.push({ x: x, y: Math.sin(x / 85) * 110 }); }
+            entity.mainRoadSegments.push({ type: "CURVE", points: pts });
+            
+            let pStart = pts[0]; let pEnd = pts[pts.length - 1]; let pMid = pts[Math.floor(pts.length/2)];
+            entity.gates.push({ x: pStart.x, y: pStart.y, len: 44, angle: Math.PI/3, name: "西北流线口" });
+            entity.gates.push({ x: pEnd.x, y: pEnd.y, len: 44, angle: -Math.PI/3, name: "东南流线口" });
+            entity.gates.push({ x: pMid.x, y: pMid.y, len: 44, angle: 0, name: "中央物流门" });
+        }
+        else if (type === "Y_SHAPE") {
+            entity.mainRoadSegments.push({ type: "LINE", x1: 0, y1: 0, x2: 0, y2: 190 }); 
+            entity.mainRoadSegments.push({ type: "LINE", x1: 0, y1: 0, x2: -240, y2: -150 }); 
+            entity.mainRoadSegments.push({ type: "LINE", x1: 0, y1: 0, x2: 240, y2: -150 }); 
+            
+            entity.gates.push({ x: 0, y: 190, len: 44, angle: 0, name: "正南主入口" });
+            entity.gates.push({ x: -240, y: -150, len: 44, angle: Math.PI/4, name: "西北门" });
+            entity.gates.push({ x: 240, y: -150, len: 44, angle: -Math.PI/4, name: "东北门" });
+        }
+        else if (type === "X_SHAPE") {
+            entity.mainRoadSegments.push({ type: "LINE", x1: -250, y1: -140, x2: 250, y2: 140 });
+            entity.mainRoadSegments.push({ type: "LINE", x1: -250, y1: 140, x2: 250, y2: -140 });
+            
+            entity.gates.push({ x: -250, y: -140, len: 44, angle: Math.PI/4, name: "西北出入口" });
+            entity.gates.push({ x: 250, y: 140, len: 44, angle: Math.PI/4, name: "东南出入口" });
+            entity.gates.push({ x: -250, y: 140, len: 44, angle: -Math.PI/4, name: "西南联络口" });
+        }
+        else if (type === "Z_SHAPE") {
+            entity.mainRoadSegments.push({ type: "LINE", x1: -260, y1: -130, x2: 170, y2: -130 }); 
+            entity.mainRoadSegments.push({ type: "LINE", x1: 170, y1: -130, x2: -170, y2: 130 }); 
+            entity.mainRoadSegments.push({ type: "LINE", x1: -170, y1: 130, x2: 260, y2: 130 }); 
+            
+            entity.gates.push({ x: -260, y: -130, len: 44, angle: Math.PI/2, name: "西折主门" });
+            entity.gates.push({ x: 260, y: 130, len: 44, angle: Math.PI/2, name: "东折侧门" });
+            entity.gates.push({ x: 0, y: 0, len: 44, angle: -Math.PI/6, name: "中转中枢口" });
+        }
+        else if (type === "C_SHAPE") {
+            let pts = [];
+            for (let a = Math.PI*0.25; a <= Math.PI*1.75; a += 0.1) { pts.push({ x: Math.cos(a)*230, y: Math.sin(a)*145 }); }
+            entity.mainRoadSegments.push({ type: "CURVE", points: pts });
+            
+            let p1 = pts[0]; let p2 = pts[pts.length-1];
+            entity.gates.push({ x: p1.x, y: p1.y, len: 44, angle: -Math.PI/5, name: "北端头线" });
+            entity.gates.push({ x: p2.x, y: p2.y, len: 44, angle: Math.PI/5, name: "南端头线" });
+            entity.gates.push({ x: -230, y: 0, len: 44, angle: Math.PI/2, name: "西侧接驳口" });
+        }
+        else if (type === "P_SHAPE") {
+            entity.mainRoadSegments.push({ type: "LINE", x1: -280, y1: 30, x2: -60, y2: 30 }); 
+            let pts = [];
+            for (let a = 0; a <= Math.PI * 2.05; a += 0.15) { pts.push({ x: -60 + Math.cos(a)*105, y: 30 + Math.sin(a)*105 }); }
+            entity.mainRoadSegments.push({ type: "CURVE", points: pts });
+            
+            entity.gates.push({ x: -280, y: 30, len: 44, angle: Math.PI/2, name: "P柄线关卡" });
+            entity.gates.push({ x: 45, y: 30, len: 44, angle: Math.PI/4, name: "东回线门" });
+            entity.gates.push({ x: -60, y: -75, len: 44, angle: 0, name: "北外沿绿道" });
+        }
+        else if (type === "NONE_STAR") {
+            // 星状去中心模式：独立设立3个端点线大门
+            entity.gates.push({ x: -260, y: -130, len: 44, angle: Math.PI/4, name: "西源头点" });
+            entity.gates.push({ x: 250, y: 110, len: 44, angle: -Math.PI/4, name: "东源头点" });
+            entity.gates.push({ x: -20, y: 175, len: 44, angle: 0, name: "南源头点" });
+        }
+
+        // 【规则2：大楼数量随机起伏(5-7)，位置全场随机散射、拒绝平齐排布】
+        const bCount = 5 + Math.floor(Math.random() * 3); // 随机产生 5, 6, 或 7 栋楼
+        let generatedBuildings = [];
+
+        for (let i = 0; i < bCount; i++) {
+            let attempts = 0;
+            let bWidth, bHeight, bX, bY, collision;
+
+            do {
+                collision = false;
+                bWidth = 100 + Math.floor(Math.random() * 25);
+                bHeight = 85 + Math.floor(Math.random() * 25);
+                
+                // 完全不受象限限制的自由撒落
+                bX = -cw/2 + 65 + Math.floor(Math.random() * (cw - 130 - bWidth));
+                bY = -ch/2 + 65 + Math.floor(Math.random() * (ch - 130 - bHeight));
+
+                // 检验已有大楼之间是否存在平齐或者离得太近（防机械化对齐，间距彻底无序化）
+                for (let j = 0; j < generatedBuildings.length; j++) {
+                    let ob = generatedBuildings[j];
+                    if (!(bX + bWidth + 30 < ob.x || bX > ob.x + ob.w + 30 || 
+                          bY + bHeight + 30 < ob.y || bY > ob.y + ob.h + 30)) {
+                        collision = true;
+                        break;
+                    }
+                }
+                attempts++;
+            } while (collision && attempts < 150);
+
+            // 深度差异化命名、床位与完全解耦重组的层级
+            let bName = buildingPrefixPool[Math.floor(Math.random()*buildingPrefixPool.length)] + 
+                        buildingSuffixPool[Math.floor(Math.random()*buildingSuffixPool.length)];
+            let bBeds = 20 + Math.floor(Math.random() * 45);
+            let usedCount = Math.floor(bBeds * (0.45 + Math.random() * 0.4));
+            let freeCount = bBeds - usedCount;
+            let shuffledFloors = [...rawFloorFunctions].sort(() => Math.random() - 0.5).slice(0, 4);
+
+            let currentBuilding = {
+                name: bName, x: bX, y: bY, w: bWidth, h: bHeight,
+                beds: bBeds, used: usedCount, free: freeCount,
+                floors: shuffledFloors,
+                isEmergency: bName.includes("急诊") || bName.includes("重症") || i === 0
+            };
+            generatedBuildings.push(currentBuilding);
+            entity.buildings.push(currentBuilding);
+
+            // 4. 【大楼坐落在主路分离出的小分叉中间/末端】
+            let bCenterX = bX + bWidth / 2;
+            let bCenterY = bY + bHeight / 2;
+            let entryX = bCenterX;
+            let entryY = bY + bHeight; 
+
+            let closestRoadPt = { x: 0, y: 0 };
+            let minRDist = Infinity;
+
+            if (type === "NONE_STAR") {
+                let g = entity.gates[i % entity.gates.length];
+                closestRoadPt = { x: g.x, y: g.y };
+            } else {
+                entity.mainRoadSegments.forEach(seg => {
+                    if (seg.type === "LINE") {
+                        for(let t=0; t<=1; t+=0.04) {
+                            let lx = seg.x1 + (seg.x2 - seg.x1) * t;
+                            let ly = seg.y1 + (seg.y2 - seg.y1) * t;
+                            let d = Math.hypot(lx - bCenterX, ly - bCenterY);
+                            if(d < minRDist) { minRDist = d; closestRoadPt = { x: lx, y: ly }; }
+                        }
+                    } else if (seg.type === "CURVE") {
+                        seg.points.forEach(pt => {
+                            let d = Math.hypot(pt.x - bCenterX, pt.y - bCenterY);
+                            if(d < minRDist) { minRDist = d; closestRoadPt = pt; }
+                        });
+                    }
+                });
+            }
+
+            // 分叉支路斜向完全切入并包裹住大楼中央
+            entity.connectiveRoads.push({
+                startX: closestRoadPt.x, startY: closestRoadPt.y,
+                endX: bCenterX, endY: bY + bHeight / 2,
+                width: 12
+            });
+        }
+
+        return entity;
+    }
+
+    // --- Canvas高级纯原生平面绘制引擎 ---
+    function drawPerfectTopologyMap() {
+        if (!activeMapEntity) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+
+        // 1. 底层高科衬底数字格网
+        ctx.strokeStyle = "rgba(0, 240, 255, 0.02)";
+        ctx.lineWidth = 1;
+        for (let x = 40; x < canvas.width; x += 40) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        for (let y = 40; y < canvas.height; y += 40) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        }
+
+        // 2. 绘制【抽离出的接驳大楼、深入大楼中心的小分叉支路网络】
+        ctx.fillStyle = "rgba(30, 42, 36, 0.9)";
+        activeMapEntity.connectiveRoads.forEach(r => {
+            ctx.strokeStyle = "rgba(33, 48, 39, 0.95)";
+            ctx.lineWidth = r.width; 
+            ctx.beginPath();
+            ctx.moveTo(cx + r.startX, cy + r.startY);
+            ctx.lineTo(cx + r.endX, cy + r.endY);
+            ctx.stroke();
+
+            ctx.strokeStyle = "rgba(50, 80, 65, 0.35)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+
+        // 3. 绘制【8种完全异构的干道网络形式】
+        if (activeMapEntity.roadType !== "NONE_STAR") {
+            ctx.strokeStyle = "rgba(42, 58, 49, 1)";
+            ctx.lineWidth = 24; 
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+
+            activeMapEntity.mainRoadSegments.forEach(seg => {
+                ctx.beginPath();
+                if (seg.type === "LINE") {
+                    ctx.moveTo(cx + seg.x1, cy + seg.y1);
+                    ctx.lineTo(cx + seg.x2, cy + seg.y2);
+                } else if (seg.type === "CURVE") {
+                    seg.points.forEach((pt, pIdx) => {
+                        if (pIdx === 0) ctx.moveTo(cx + pt.x, cy + pt.y);
+                        else ctx.lineTo(cx + pt.x, cy + pt.y);
+                    });
+                }
+                ctx.stroke();
+
+                // 中心反光分线
+                ctx.strokeStyle = "rgba(255, 183, 3, 0.18)";
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([6, 10]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.strokeStyle = "rgba(42, 58, 49, 1)"; 
+                ctx.lineWidth = 24;
+            });
+        }
+
+        // 4. 【满足最新修正】大门改为坐落在路网终端上的一条干净、垂直高亮的亮粉色“截断收尾线”
+        activeMapEntity.gates.forEach(g => {
+            ctx.save();
+            ctx.translate(cx + g.x, cy + g.y);
+            ctx.rotate(g.angle); // 根据道路边缘切线旋转
+
+            // 绘制精细的截断物理线
+            ctx.strokeStyle = "#e056fd";
+            ctx.lineWidth = 4; // 截断线线宽
+            ctx.shadowColor = "#e056fd";
+            ctx.shadowBlur = 8;
+            
+            ctx.beginPath();
+            ctx.moveTo(0, -g.len / 2);
+            ctx.lineTo(0, g.len / 2);
+            ctx.stroke();
+            
+            ctx.shadowBlur = 0; // 重置
+
+            // 文字紧贴在截断线外延
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 10px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(g.name, 15, 4);
+            ctx.restore();
+        });
+
+        // 5. 绘制【无序散射分布并包裹着小分叉的建筑物】
+        activeMapEntity.buildings.forEach(b => {
+            let bX = cx + b.x;
+            let bY = cy + b.y;
+
+            ctx.fillStyle = b.isEmergency ? "rgba(115, 28, 28, 0.55)" : "rgba(15, 48, 102, 0.6)";
+            ctx.strokeStyle = b.isEmergency ? "rgba(255, 60, 60, 0.55)" : "rgba(0, 240, 255, 0.35)";
+            ctx.lineWidth = 1.5;
+            ctx.fillRect(bX, bY, b.w, b.h);
+            ctx.strokeRect(bX, bY, b.w, b.h);
+
+            // 名字
+            ctx.fillStyle = b.isEmergency ? "#ff4d4d" : "#00f0ff";
+            ctx.font = "bold 12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(b.name, bX + b.w / 2, bY + 18);
+
+            // 床位资产数字
+            ctx.font = "10px sans-serif";
+            ctx.fillStyle = "#ff5e5e";
+            ctx.fillText("占用:" + b.used + "张", bX + b.w / 2 - 25, bY + 34);
+            ctx.fillStyle = "#1dd1a1";
+            ctx.fillText("空闲:" + b.free + "张", bX + b.w / 2 + 25, bY + 34);
+
+            ctx.strokeStyle = "rgba(0, 240, 255, 0.12)";
+            ctx.beginPath(); ctx.moveTo(bX + 8, bY + 42); ctx.lineTo(bX + b.w - 8, bY + 42); ctx.stroke();
+
+            // 深度随随机重组的楼层
+            ctx.textAlign = "left";
+            ctx.font = "9px sans-serif";
+            b.floors.forEach((fl, idx) => {
+                let flY = bY + 54 + (idx * 14);
+                if (flY < bY + b.h - 4) {
+                    ctx.fillStyle = (fl.includes("病房") || fl.includes("住院") || fl.includes("ICU") || fl.includes("监护")) ? "#06d6a0" : "#a5b5c4";
+                    ctx.beginPath(); ctx.arc(bX + 11, flY - 3, 1.5, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillText(fl, bX + 17, flY);
+                }
+            });
+        });
+    }
+
+    // --- 大屏自动化轮播控制核心 ---
+    function performHospitalRotation() {
+        let hosp = hospitalsInfo[currentHospitalIndex];
+        activeMapEntity = generateTrueRandomTopology(hosp);
+
+        // 面板状态回填
+        document.getElementById('hospitalName').innerText = hosp.name;
+        document.getElementById('roadTypeLabel').innerText = hosp.desc;
+        
+        let totalBeds = activeMapEntity.buildings.reduce((sum, b) => sum + b.beds, 0);
+        document.getElementById('hospitalTotalBeds').innerText = totalBeds + " 张";
+        document.getElementById('chartTitle').innerText = hosp.name + " - 出入口(端点截断)与散射建筑(分叉内)强咬合平面图";
+
+        // 联动刷新左侧树结构明细
+        const fContainer = document.getElementById('floorContainer');
+        fContainer.innerHTML = ""; 
+        
+        activeMapEntity.buildings.forEach(b => {
+            let group = document.createElement('div');
+            group.innerHTML = `<div class="floor-group-title">🏥 ${b.name} (${b.beds}床)</div>`;
+            b.floors.forEach(fl => {
+                let item = document.createElement('div');
+                item.className = "floor-item";
+                item.innerHTML = `<span>${fl}</span><span style="color:#06d6a0; font-weight:bold;">在线监测</span>`;
+                group.appendChild(item);
+            });
+            fContainer.appendChild(group);
+        });
+
+        drawPerfectTopologyMap();
+
+        currentHospitalIndex = (currentHospitalIndex + 1) % hospitalsInfo.length;
+        countdownValue = 3.0; 
+    }
+
+    function runCountdown() {
+        countdownValue -= 0.1;
+        if(countdownValue <= 0) countdownValue = 0;
+        document.getElementById('refreshTimer').innerText = "拓扑地形更替倒计时: " + countdownValue.toFixed(1) + "s";
+    }
+
+    window.addEventListener('resize', () => {
+        if(activeMapEntity) {
+            enforceCanvasSize();
+            drawPerfectTopologyMap();
+        }
+    });
+
+    // 稳定加载启动
+    setTimeout(() => {
+        performHospitalRotation();
+        globalTimer = setInterval(performHospitalRotation, switchInterval);
+        countdownTimer = setInterval(runCountdown, 100);
+    }, 150);
+</script>
+
+</body>
+</html>
